@@ -1,0 +1,9 @@
+es_tools/
+├── search_session.py      # Core session management class
+├── agent_tools.py         # Agent-friendly wrapper functions
+├── utils.py              # Helper functions
+├── requirements.txt       # Dependencies
+└── notebooks/
+    ├── 01_basic_search.ipynb           # Your current notebook
+    ├── 02_session_management.ipynb     # New: Interactive session testing
+    └── 03_agent_integration.ipynb      # New: Testing agent patterns
