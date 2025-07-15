@@ -399,35 +399,35 @@ def create_elasticsearch_tools() -> List[BaseTool]:
     tools = [
         Tool(
             name="search_publications",
-            description="Search research publications using full-text search. Use this for general queries about topics, keywords, or content.",
+            description="Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields. Parameters: query (string), max_results (int, default=10), fields (optional list of strings). Returns JSON with total_hits (int), results (list of objects with id, score, title, authors, year, abstract), and query (string).",
             func=lambda query: search_publications(query, max_results=10),
             args_schema=SearchPublicationsInput
         ),
         
         Tool(
             name="search_by_author",
-            description="Search publications by author name. Use 'exact' for full name matches, 'partial' for surname matches, 'fuzzy' for typo-tolerant search.",
+            description="Search publications by author name in Persons.PersonData.DisplayName field. Parameters: author_name (string), strategy (string: 'exact' for phrase match, 'partial' for default match, 'fuzzy' for typo-tolerant search), max_results (int, default=10). Returns JSON with total_hits (int), results (list of objects with id, title, authors, year, journal, publication_type, abstract), author (string), and strategy (string).",
             func=lambda author_name, strategy="partial": search_by_author(author_name, strategy, max_results=10),
             args_schema=SearchByAuthorInput
         ),
         
         Tool(
             name="get_field_statistics",
-            description="Get statistics for a specific field like 'year', 'authors', 'journal', or 'publication_type'. Shows top values and counts.",
+            description="Get statistics for a specific field. Valid fields: 'Year', 'Persons.PersonData.DisplayName', 'Source', 'PublicationType'. Parameters: field (string), size (int, default=10). Returns JSON with field (string), total_documents (int), and top_values (list of objects with value and count).",
             func=lambda field: get_field_statistics(field, size=10),
             args_schema=GetFieldStatisticsInput
         ),
         
         Tool(
             name="get_publication_details",
-            description="Get detailed information about a specific publication using its ID.",
+            description="Get detailed information about a specific publication. Parameters: publication_id (string). Returns JSON with id, title, authors, year, journal, publication_type, abstract, keywords, doi, and url.",
             func=get_publication_details,
             args_schema=GetPublicationDetailsInput
         ),
         
         Tool(
             name="get_database_summary",
-            description="Get a summary of the database including total publications, top years, publication types, and author counts.",
+            description="Get a summary of the database. No parameters. Returns JSON with total_publications (int), latest_year (int), most_common_type (string), total_authors (int), years (list of objects with value and count), and publication_types (list of objects with value and count).",
             func=lambda: json.dumps(get_statistics_summary())
         )
     ]

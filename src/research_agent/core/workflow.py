@@ -70,10 +70,10 @@ This plan should involve individual tasks using the available tools, that if exe
 The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
 
 Available tools:
-- search_publications: Search research publications using full-text search
-- search_by_author: Search publications by author name
-- get_field_statistics: Get statistics for specific fields
-- get_publication_details: Get detailed information about a publication
+- search_publications: Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
+- search_by_author: Search publications by author name in Persons.PersonData.DisplayName field
+- get_field_statistics: Get statistics for specific fields (valid fields: Year, Persons.PersonData.DisplayName, Source, PublicationType)
+- get_publication_details: Get detailed information about a publication using its ID
 - get_database_summary: Get database summary statistics
 
 Focus on using these tools effectively for research publication queries.""",
@@ -109,10 +109,10 @@ You have currently done the follow steps:
 Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan.
 
 Available tools:
-- search_publications: Search research publications using full-text search
-- search_by_author: Search publications by author name
-- get_field_statistics: Get statistics for specific fields
-- get_publication_details: Get detailed information about a publication
+- search_publications: Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
+- search_by_author: Search publications by author name in Persons.PersonData.DisplayName field
+- get_field_statistics: Get statistics for specific fields (valid fields: Year, Persons.PersonData.DisplayName, Source, PublicationType)
+- get_publication_details: Get detailed information about a publication using its ID
 - get_database_summary: Get database summary statistics
 
 IMPORTANT: You must respond with either:
