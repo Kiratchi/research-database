@@ -54,7 +54,7 @@ class StreamlitAgent:
         """Check if the agent is properly initialized."""
         return self.research_agent is not None
     
-    async def process_query(self, query: str) -> Dict[str, Any]:
+    def process_query(self, query: str) -> Dict[str, Any]:
         """
         Process a query through the ResearchAgent.
         
@@ -73,8 +73,16 @@ class StreamlitAgent:
             }
         
         try:
-            # Execute the query
-            result = await self.research_agent.query(query)
+            # Execute the query using sync version to avoid async issues
+            from src.research_agent.core.workflow import run_research_query
+            
+            result = run_research_query(
+                query,
+                self.es_client,
+                self.index_name,
+                50,  # recursion_limit
+                False  # stream
+            )
             
             return {
                 'success': True,
@@ -171,15 +179,8 @@ class StreamlitAgent:
             Query result
         """
         try:
-            # Create new event loop if none exists
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            # Run the async query
-            return loop.run_until_complete(self.process_query(query))
+            # Direct sync query - no async needed
+            return self.process_query(query)
             
         except Exception as e:
             return {
@@ -299,7 +300,29 @@ def format_streaming_response(event: Dict[str, Any]) -> str:
     elif event_type == 'step':
         node = event.get('node', 'unknown')
         content = event.get('content', {})
-        return f"⚡ **{node.title()}:** {content}"
+        
+        # Handle different node types with proper formatting
+        if node == 'complete':
+            # Extract the response from the complete step
+            if isinstance(content, dict) and 'response' in content:
+                return f"**Final Answer:**\n\n{content['response']}"
+            else:
+                return f"**Final Answer:**\n\n{content}"
+        elif node == 'replan':
+            # Format replan content
+            if isinstance(content, dict):
+                if 'response' in content:
+                    return f"**Final Answer:**\n\n{content['response']}"
+                elif 'plan' in content:
+                    steps = content['plan']
+                    if steps:
+                        formatted_steps = "\n".join([f"  {i+1}. {step}" for i, step in enumerate(steps)])
+                        return f"🔄 **Replanning:**\n{formatted_steps}"
+                    return "🔄 **Replanning** (empty)"
+            return f"🔄 **Replan:** {content}"
+        else:
+            # For other nodes, display as is
+            return f"⚡ **{node.title()}:** {content}"
     
     else:
         return f"ℹ️ **{event_type.title()}:** {event.get('content', 'No content')}"

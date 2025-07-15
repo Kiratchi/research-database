@@ -7,35 +7,19 @@ Following LangChain's official plan-and-execute pattern from DEMO_plan-and-execu
 from typing import Dict, Any, Optional, Literal
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain_litellm import ChatLiteLLM
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from typing import Union, List
 import os
+from dotenv import load_dotenv
 
 from .state import PlanExecuteState
 from ..tools.elasticsearch_tools import initialize_elasticsearch_tools, create_elasticsearch_tools
 
 
-# Pydantic models following DEMO patterns
-class Plan(BaseModel):
-    """Plan to follow in future"""
-    steps: List[str] = Field(
-        description="different steps to follow, should be in sorted order"
-    )
-
-
-class Response(BaseModel):
-    """Response to user."""
-    response: str
-
-
-class Act(BaseModel):
-    """Action to perform."""
-    action: Union[Response, Plan] = Field(
-        description="Action to perform. If you want to respond to user, use Response. "
-        "If you need to further use tools to get the answer, use Plan."
-    )
+# Import models from models.py
+from .models import Plan, Response, Act
 
 
 def create_research_workflow(
@@ -59,8 +43,16 @@ def create_research_workflow(
     # Get tools for the executor
     tools = create_elasticsearch_tools()
     
-    # Choose the LLM that will drive the agent
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    # Load environment variables for LiteLLM
+    load_dotenv()
+    
+    # Choose the LLM that will drive the agent - using LiteLLM proxy
+    llm = ChatLiteLLM(
+        model="anthropic/claude-sonet-4",  # Use Claude Sonet 4 for complex reasoning
+        api_key=os.getenv("LITELLM_API_KEY"),
+        api_base=os.getenv("LITELLM_BASE_URL"),
+        temperature=0
+    )
     
     # Create the execution agent using langgraph prebuilt
     agent_executor = create_react_agent(
@@ -91,6 +83,14 @@ Focus on using these tools effectively for research publication queries.""",
     
     planner = planner_prompt | llm.with_structured_output(Plan)
     
+    # Create a separate LLM instance for replanner (could use different model for efficiency)
+    replanner_llm = ChatLiteLLM(
+        model="anthropic/claude-haiku-3.5",  # Use faster model for replanning
+        api_key=os.getenv("LITELLM_API_KEY"),
+        api_base=os.getenv("LITELLM_BASE_URL"),
+        temperature=0
+    )
+    
     # Create replanner following DEMO patterns
     replanner_prompt = ChatPromptTemplate.from_template(
         """For the given objective, come up with a simple step by step plan for searching research publications. \
@@ -113,47 +113,147 @@ Available tools:
 - search_by_author: Search publications by author name
 - get_field_statistics: Get statistics for specific fields
 - get_publication_details: Get detailed information about a publication
-- get_database_summary: Get database summary statistics"""
+- get_database_summary: Get database summary statistics
+
+IMPORTANT: You must respond with either:
+1. action_type: "response" with a final response to the user
+2. action_type: "plan" with a list of remaining steps
+
+Do not mix response and plan fields. Choose one action type only.
+
+RESPONSE FORMATTING GUIDELINES:
+- Provide direct, concise answers to the user's specific question
+- Include the most relevant information prominently
+- Use clear formatting (bullet points, numbering, headers) when appropriate
+- Avoid unnecessary technical details about search processes
+- Focus on actionable information the user can use"""
     )
     
-    replanner = replanner_prompt | llm.with_structured_output(Act)
+    replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
     
     # Define workflow steps following DEMO patterns
-    async def execute_step(state: PlanExecuteState):
+    def execute_step(state: PlanExecuteState):
         """Execute the current step using the research tools."""
         plan = state["plan"]
         plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan))
         task = plan[0]
-        task_formatted = f"""For the following plan:
+        
+        # Check if this is a simple query that can be completed in one step
+        original_query = state.get("input", "")
+        
+        # General prompting for all query types
+        task_formatted = f"""Original query: {original_query}
+
+Current plan:
 {plan_str}
 
-You are tasked with executing step 1: {task}
+You are executing: {task}
 
-Use the available research publication tools to complete this step."""
+Use the available research publication tools to complete this step. Provide clear, specific answers that directly address the user's question. If you need additional information to fully answer the query, continue with the next step in the plan."""
         
-        agent_response = await agent_executor.ainvoke(
+        # Use sync invoke to avoid async issues with LiteLLM
+        agent_response = agent_executor.invoke(
             {"messages": [("user", task_formatted)]}
         )
         
+        response_content = agent_response["messages"][-1].content
+        
+        # Check if this response seems to fully answer the original query
+        if ("total publications" in response_content.lower() or 
+            "publications found" in response_content.lower() or
+            ("has published" in response_content.lower() and "publications" in response_content.lower())):
+            # This might be a complete answer - let the routing decide
+            pass
+        
         return {
-            "past_steps": [(task, agent_response["messages"][-1].content)],
+            "past_steps": [(task, response_content)],
         }
     
-    async def plan_step(state: PlanExecuteState):
+    def plan_step(state: PlanExecuteState):
         """Create the initial plan for the research query."""
-        plan = await planner.ainvoke({"messages": [("user", state["input"])]})
+        # Use sync invoke to avoid async issues with LiteLLM
+        plan = planner.invoke({"messages": [("user", state["input"])]})
         return {"plan": plan.steps}
     
-    async def replan_step(state: PlanExecuteState):
+    def replan_step(state: PlanExecuteState):
         """Replan based on the results so far."""
-        output = await replanner.ainvoke(state)
-        if isinstance(output.action, Response):
-            return {"response": output.action.response}
+        # Use sync invoke to avoid async issues with LiteLLM
+        output = replanner.invoke(state)
+        if output.action_type == "response":
+            return {"response": output.response}
         else:
-            return {"plan": output.action.steps}
+            return {"plan": output.steps}
+    
+    def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
+        """Determine if agent should continue with replan or end."""
+        # Check if we have a plan and past steps
+        plan = state.get("plan", [])
+        past_steps = state.get("past_steps", [])
+        
+        if not plan or not past_steps:
+            return "replan"
+        
+        # Key insight: Only complete if ALL plan steps are done OR if the user's specific question is answered
+        original_query = state.get("input", "").lower()
+        recent_step = past_steps[-1][1] if past_steps else ""
+        
+        # Check if all plan steps are completed
+        if len(past_steps) >= len(plan):
+            return "complete"
+        
+        # General completion logic: check if the response seems to directly answer the question
+        # Look for indicators that this is a complete response rather than intermediate results
+        
+        # If the response is asking the user for input, it's not complete
+        if any(phrase in recent_step.lower() for phrase in ["would you like", "do you want", "shall i", "should i"]):
+            return "replan"
+        
+        # If the response seems to be providing a direct answer to the question
+        answer_indicators = ["the answer is", "based on", "according to", "results show", "found that"]
+        if any(indicator in recent_step.lower() for indicator in answer_indicators):
+            return "complete"
+        
+        # If the response is quite substantial and contains specific information
+        if len(recent_step) > 200 and len(past_steps) > 0:
+            # Check if this seems like a final answer rather than a search summary
+            if not any(phrase in recent_step.lower() for phrase in ["now we can", "next step", "proceed to"]):
+                return "complete"
+        
+        # Default: continue with replan
+        return "replan"
+    
+    def complete_step(state: PlanExecuteState):
+        """Complete the workflow by setting the response from the last step."""
+        if state.get("past_steps"):
+            recent_step = state["past_steps"][-1][1]
+            original_query = state.get("input", "")
+            
+            # Format response based on query type
+            formatted_response = format_final_response(recent_step, original_query)
+            return {"response": formatted_response}
+        return {"response": "Task completed."}
+    
+    def format_final_response(response: str, original_query: str) -> str:
+        """Format the final response for better user experience."""
+        # General formatting improvements without query-specific logic
+        
+        # Clean up the response
+        response = response.strip()
+        
+        # If response is very short, assume it's a direct answer
+        if len(response) < 50:
+            return f"**Answer:** {response}"
+        
+        # If response contains structured information, preserve it
+        if any(indicator in response for indicator in ['**', '###', '- ', '1.', '2.']):
+            return response
+        
+        # For longer responses, add a subtle header
+        return f"**Result:**\n\n{response}"
+    
     
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
-        """Determine if we should end or continue."""
+        """Determine if we should end or continue after replan."""
         if "response" in state and state["response"]:
             return "__end__"
         else:
@@ -166,13 +266,23 @@ Use the available research publication tools to complete this step."""
     workflow.add_node("planner", plan_step)
     workflow.add_node("agent", execute_step)
     workflow.add_node("replan", replan_step)
+    workflow.add_node("complete", complete_step)
     
-    # Add edges exactly like DEMO
+    # Add edges following DEMO pattern with proper conditional routing
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "agent")
-    workflow.add_edge("agent", "replan")
     
-    # Add conditional edge for ending
+    # Add conditional edge from agent - let agent decide next action
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue_or_end,
+        ["replan", "complete", END]
+    )
+    
+    # Add edge from complete to END
+    workflow.add_edge("complete", END)
+    
+    # Add conditional edge for ending after replan
     workflow.add_conditional_edges(
         "replan",
         should_end,
@@ -206,7 +316,7 @@ def compile_research_agent(
     return app
 
 
-async def run_research_query(
+def run_research_query(
     query: str,
     es_client=None,
     index_name: str = "research-publications-static",
@@ -247,7 +357,7 @@ async def run_research_query(
     if stream:
         # Stream the execution
         final_state = None
-        async for event in app.astream(initial_state, config=config):
+        for event in app.stream(initial_state, config=config):
             for k, v in event.items():
                 if k != "__end__":
                     print(f"Step: {k}")
@@ -257,8 +367,8 @@ async def run_research_query(
         
         return final_state
     else:
-        # Run synchronously
-        result = await app.ainvoke(initial_state, config=config)
+        # Run synchronously - avoid async issues with LiteLLM
+        result = app.invoke(initial_state, config=config)
         return result
 
 

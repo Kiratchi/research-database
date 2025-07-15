@@ -75,7 +75,7 @@ def search_publications(query: str, max_results: int = 10, fields: Optional[List
             "query": {
                 "multi_match": {
                     "query": query,
-                    "fields": fields or ["title^2", "abstract", "authors", "keywords"],
+                    "fields": fields or ["Title^2", "Abstract", "Persons.PersonData.DisplayName", "Keywords"],
                     "type": "best_fields",
                     "fuzziness": "AUTO"
                 }
@@ -91,13 +91,24 @@ def search_publications(query: str, max_results: int = 10, fields: Optional[List
         
         results = []
         for hit in response['hits']['hits']:
+            source = hit['_source']
+            
+            # Extract author information from Persons field
+            authors = []
+            persons = source.get('Persons', [])
+            for person in persons:
+                person_data = person.get('PersonData', {})
+                display_name = person_data.get('DisplayName', '')
+                if display_name:
+                    authors.append(display_name)
+            
             result = {
                 "id": hit['_id'],
                 "score": hit['_score'],
-                "title": hit['_source'].get('title', 'No title'),
-                "authors": hit['_source'].get('authors', 'No authors'),
-                "year": hit['_source'].get('year', 'No year'),
-                "abstract": hit['_source'].get('abstract', 'No abstract')[:300] + "..." if hit['_source'].get('abstract', '') else "No abstract"
+                "title": source.get('Title', 'No title'),
+                "authors": ', '.join(authors) if authors else 'No authors',
+                "year": source.get('Year', 'No year'),
+                "abstract": source.get('Abstract', 'No abstract')[:300] + "..." if source.get('Abstract', '') else "No abstract"
             }
             results.append(result)
         
@@ -127,29 +138,26 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        # Build query based on strategy
+        # Build query based on strategy - using Persons field structure
         if strategy == "exact":
             query = {
                 "match_phrase": {
-                    "authors": author_name
+                    "Persons.PersonData.DisplayName": author_name
                 }
             }
         elif strategy == "fuzzy":
             query = {
                 "fuzzy": {
-                    "authors": {
+                    "Persons.PersonData.DisplayName": {
                         "value": author_name,
                         "fuzziness": "AUTO"
                     }
                 }
             }
-        else:  # partial (default)
+        else:  # partial (default) - use match_phrase for exact name matching
             query = {
-                "match": {
-                    "authors": {
-                        "query": author_name,
-                        "operator": "and"
-                    }
+                "match_phrase": {
+                    "Persons.PersonData.DisplayName": author_name
                 }
             }
         
@@ -177,13 +185,25 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         
         results = []
         for hit in response['hits']['hits']:
+            source = hit['_source']
+            
+            # Extract author information from Persons field
+            authors = []
+            persons = source.get('Persons', [])
+            for person in persons:
+                person_data = person.get('PersonData', {})
+                display_name = person_data.get('DisplayName', '')
+                if display_name:
+                    authors.append(display_name)
+            
             result = {
                 "id": hit['_id'],
-                "title": hit['_source'].get('title', 'No title'),
-                "authors": hit['_source'].get('authors', 'No authors'),
-                "year": hit['_source'].get('year', 'No year'),
-                "journal": hit['_source'].get('journal', 'No journal'),
-                "publication_type": hit['_source'].get('publication_type', 'No type')
+                "title": source.get('Title', 'No title'),
+                "authors": ', '.join(authors) if authors else 'No authors',
+                "year": source.get('Year', 'No year'),
+                "journal": source.get('Source', 'No journal'),
+                "publication_type": source.get('PublicationType', 'No type'),
+                "abstract": source.get('Abstract', 'No abstract')[:200] + "..." if source.get('Abstract') else 'No abstract'
             }
             results.append(result)
         
@@ -219,7 +239,7 @@ def get_field_statistics(field: str, size: int = 10) -> str:
             "aggs": {
                 "field_stats": {
                     "terms": {
-                        "field": f"{field}.keyword" if field in ["authors", "journal", "publication_type"] else field,
+                        "field": f"{field}.keyword" if field in ["Persons.PersonData.DisplayName", "Source", "PublicationType"] else field,
                         "size": size
                     }
                 }
@@ -264,17 +284,27 @@ def get_publication_details(publication_id: str) -> str:
         )
         
         source = response['_source']
+        
+        # Extract author information from Persons field
+        authors = []
+        persons = source.get('Persons', [])
+        for person in persons:
+            person_data = person.get('PersonData', {})
+            display_name = person_data.get('DisplayName', '')
+            if display_name:
+                authors.append(display_name)
+        
         details = {
             "id": publication_id,
-            "title": source.get('title', 'No title'),
-            "authors": source.get('authors', 'No authors'),
-            "year": source.get('year', 'No year'),
-            "journal": source.get('journal', 'No journal'),
-            "publication_type": source.get('publication_type', 'No type'),
-            "abstract": source.get('abstract', 'No abstract'),
-            "keywords": source.get('keywords', 'No keywords'),
-            "doi": source.get('doi', 'No DOI'),
-            "url": source.get('url', 'No URL')
+            "title": source.get('Title', 'No title'),
+            "authors": ', '.join(authors) if authors else 'No authors',
+            "year": source.get('Year', 'No year'),
+            "journal": source.get('Source', 'No journal'),
+            "publication_type": source.get('PublicationType', 'No type'),
+            "abstract": source.get('Abstract', 'No abstract'),
+            "keywords": source.get('Keywords', 'No keywords'),
+            "doi": source.get('IdentifierDoi', 'No DOI'),
+            "url": source.get('DetailsUrlEng', 'No URL')
         }
         
         return json.dumps(details)
@@ -306,7 +336,7 @@ def get_statistics_summary() -> Dict[str, Any]:
                 "aggs": {
                     "years": {
                         "terms": {
-                            "field": "year",
+                            "field": "Year",
                             "size": 5,
                             "order": {"_key": "desc"}
                         }
@@ -323,7 +353,7 @@ def get_statistics_summary() -> Dict[str, Any]:
                 "aggs": {
                     "types": {
                         "terms": {
-                            "field": "publication_type.keyword",
+                            "field": "PublicationType.keyword",
                             "size": 5
                         }
                     }
@@ -339,7 +369,7 @@ def get_statistics_summary() -> Dict[str, Any]:
                 "aggs": {
                     "author_count": {
                         "cardinality": {
-                            "field": "authors.keyword"
+                            "field": "Persons.PersonData.DisplayName.keyword"
                         }
                     }
                 }

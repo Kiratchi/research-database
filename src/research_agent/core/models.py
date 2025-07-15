@@ -4,7 +4,7 @@ Pydantic models for the research agent.
 Following LangChain's official plan-and-execute pattern with structured output.
 """
 
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import BaseModel, Field
 
 
@@ -44,17 +44,24 @@ class Response(BaseModel):
 class Act(BaseModel):
     """Action to perform - either respond or continue planning."""
     
-    action: Union[Response, Plan] = Field(
-        description="Action to perform. If you want to respond to user, use Response. "
-        "If you need to further use tools to get the answer, use Plan."
+    action_type: str = Field(
+        description="Type of action: 'response' to respond to user, 'plan' to continue planning"
+    )
+    response: Optional[str] = Field(
+        default=None,
+        description="Final response to user (only if action_type is 'response')"
+    )
+    steps: Optional[List[str]] = Field(
+        default=None,
+        description="Plan steps to execute (only if action_type is 'plan')"
     )
     
     class Config:
         json_schema_extra = {
             "example": {
-                "action": {
-                    "response": "The answer is 42."
-                }
+                "action_type": "response",
+                "response": "The answer is 42.",
+                "steps": None
             }
         }
 

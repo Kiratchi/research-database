@@ -52,41 +52,65 @@ We have successfully implemented and validated a comprehensive, production-ready
 - ✅ Concurrent request handling
 - ✅ Error recovery and graceful degradation
 
+## 🎯 **IMMEDIATE FOCUS: MVP Streamlit Chat Agent**
+
+### **Feasible MVP Criteria (Priority Order)**
+1. **✅ Responsiveness** - First token ≤2s, streaming updates (FEASIBLE - have performance monitoring)
+2. **✅ Clarity** - Show current plan step + compact log (FEASIBLE - planner.py has step tracking)
+3. **✅ Error Handling** - User-friendly alerts with retry (FEASIBLE - ES error handling exists)
+4. **✅ Conversation Persistence** - Session history (FEASIBLE - Streamlit session state)
+5. **⚠️ Result Context** - Citations + JSON pop-up (MEDIUM - need formatting)
+
+### **MVP Implementation Plan**
+- **Day 1**: Core chat agent with plan-and-execute integration
+- **Day 2**: Streaming UI with step visibility + error handling
+- **Day 3**: Polish and testing
+
 ## 🔄 **Next Steps in Full Plan**
 
-### **Phase 1: Repository Setup & Initial Push** (NEXT)
-1. **Repository Initialization**
-   - Set up git repository structure
-   - Create proper `.gitignore` for Python/ES projects
-   - Initialize README with project description
-   - Set up proper branch structure
+### **Phase 1: MVP Chat Agent Development** (CURRENT)
+1. **Core Chat Agent Implementation**
+   - Fix missing streamlit_agent.py integration
+   - Connect existing planner.py with Streamlit UI
+   - Implement plan-and-execute workflow in chat interface
+   - Add streaming updates for real-time feedback
 
-2. **Project Structure Organization**
-   - Organize code into logical modules
-   - Create proper Python package structure
-   - Set up configuration management
-   - Establish development/production environments
+2. **Essential UX Features**
+   - Responsiveness: First token ≤2s with streaming
+   - Clarity: Show current step + compact execution log
+   - Error Handling: User-friendly alerts with retry buttons
+   - Conversation Persistence: Session-based chat history
 
-3. **Documentation & Setup**
-   - Create comprehensive README
-   - Document installation and setup procedures
-   - Create developer documentation
-   - Set up CI/CD pipeline basics
+3. **Integration & Testing**
+   - Connect LangGraph planner with Elasticsearch tools
+   - Test complex multi-step research queries
+   - Validate performance thresholds
+   - Ensure robust error recovery
 
 ### **Phase 2: Core Application Development** (PLANNED)
-1. **Streamlit Application**
-   - Enhanced UI for research workflows
-   - Interactive search and visualization
+1. **Plan-and-Execute Agent Integration** (PRIORITY)
+   - Integrate existing LangGraph plan-and-execute architecture (`src/research_agent/agents/planner.py`)
+   - Implement Plan → Execute → Replan workflow for complex research queries
+   - Connect planner with Elasticsearch tools for multi-step research workflows
+   - Add execution tracking and result aggregation across planning steps
+   - Enhance agent state management for complex research sessions
+
+2. **Enhanced Streamlit Application**
+   - Integrate plan-and-execute agent into UI workflow
+   - Display planning steps and execution progress to users
+   - Interactive research workflows with step-by-step execution
    - Real-time query performance monitoring
    - Session management and state persistence
+   - Planning visualization and execution tracking
 
-2. **LangGraph Agent Integration**
-   - Advanced query planning and execution
-   - Multi-step research workflows
-   - Tool chaining and optimization
-   - Context-aware query refinement
+3. **Advanced LangGraph Integration**
+   - Multi-step research workflows using existing Plan/Act models
+   - Context-aware query refinement and replanning
+   - Tool chaining optimization with execution feedback
+   - Research result synthesis across multiple planning steps
+   - Advanced query planning with dynamic step generation
 
-3. **Production Deployment**
+4. **Production Deployment**
    - Containerization (Docker)
    - Environment configuration
    - Performance optimization

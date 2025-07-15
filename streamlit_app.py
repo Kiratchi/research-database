@@ -83,18 +83,19 @@ def format_agent_response(response_data: dict) -> str:
         Formatted string for display
     """
     if not response_data.get('success', False):
-        return f"❌ Error: {response_data.get('error', 'Unknown error')}"
+        error_msg = response_data.get('error', 'Unknown error')
+        return f"❌ **Error:** {error_msg}"
     
     response = response_data.get('response', 'No response generated')
     metadata = response_data.get('metadata', {})
     
     # Format the main response
-    formatted_response = f"{response}\n\n"
+    formatted_response = f"**Answer:** {response}\n\n"
     
     # Add plan information if available
     plan = metadata.get('plan', [])
     if plan:
-        formatted_response += "📋 **Plan:**\n"
+        formatted_response += "📋 **Research Plan:**\n"
         for i, step in enumerate(plan, 1):
             formatted_response += f"  {i}. {step}\n"
         formatted_response += "\n"
@@ -103,16 +104,20 @@ def format_agent_response(response_data: dict) -> str:
     past_steps = metadata.get('past_steps', [])
     if past_steps:
         formatted_response += "🔍 **Execution Steps:**\n"
-        for i, step in enumerate(past_steps, 1):
-            step_desc = step.get('step', 'Unknown step')
-            step_result = step.get('result', 'No result')
+        for i, (step_desc, step_result) in enumerate(past_steps, 1):
+            # Truncate long results for better display
+            if len(str(step_result)) > 200:
+                step_result = str(step_result)[:200] + "..."
             formatted_response += f"  {i}. {step_desc} → {step_result}\n"
         formatted_response += "\n"
     
     # Add result statistics if available
     total_results = metadata.get('total_results')
     if total_results is not None:
-        formatted_response += f"📊 **Results:** {total_results}\n"
+        formatted_response += f"📊 **Results Found:** {total_results}\n\n"
+    
+    # Add citation info if available
+    formatted_response += "💡 *This response was generated using the research publication database.*"
     
     return formatted_response
 
@@ -378,20 +383,42 @@ def main():
             # Process the query
             with st.chat_message("assistant"):
                 with st.spinner("Processing query..."):
-                    # Use streaming or synchronous processing
-                    if streaming_enabled:
-                        response_content = process_query_with_streaming(agent, prompt)
-                        debug_info = None  # Debug info already shown in streaming
-                    else:
-                        # Synchronous processing
-                        result = agent.run_sync_query(prompt)
-                        response_content = format_agent_response(result)
-                        st.markdown(response_content)
-                        debug_info = result
+                    try:
+                        # Use streaming or synchronous processing
+                        if streaming_enabled:
+                            response_content = process_query_with_streaming(agent, prompt)
+                            debug_info = None  # Debug info already shown in streaming
+                        else:
+                            # Synchronous processing
+                            result = agent.run_sync_query(prompt)
+                            response_content = format_agent_response(result)
+                            st.markdown(response_content)
+                            debug_info = result
+                            
+                            # Show debug info for sync queries
+                            if st.session_state.debug_mode:
+                                display_debug_panel(response_data=result)
+                    
+                    except Exception as e:
+                        # Handle errors gracefully
+                        error_message = f"❌ **Error processing query:** {str(e)}"
+                        st.error(error_message)
                         
-                        # Show debug info for sync queries
+                        # Add retry button
+                        if st.button("🔄 Retry Query", key=f"retry_{len(st.session_state.messages)}"):
+                            st.rerun()
+                        
+                        # Show error details in debug mode
                         if st.session_state.debug_mode:
-                            display_debug_panel(response_data=result)
+                            with st.expander("🔧 Error Details"):
+                                st.code(traceback.format_exc())
+                        
+                        response_content = error_message
+                        debug_info = {
+                            'success': False,
+                            'error': str(e),
+                            'traceback': traceback.format_exc()
+                        }
                 
                 # Add assistant message to chat history
                 st.session_state.messages.append({
