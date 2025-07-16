@@ -76,11 +76,11 @@ The application will open in your browser at `http://localhost:8501`
 
 The research agent has access to these Elasticsearch tools:
 
-1. **`search_publications`**: Full-text search across publications
-2. **`search_by_author`**: Search publications by author name (exact, partial, fuzzy)
-3. **`get_field_statistics`**: Get statistics for specific fields
-4. **`get_publication_details`**: Get detailed information about a publication
-5. **`get_database_summary`**: Get overview of database contents
+1. **`search_publications`**: Full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
+2. **`search_by_author`**: Search publications by author name in Persons.PersonData.DisplayName field (exact, partial, fuzzy strategies)
+3. **`get_field_statistics`**: Get statistics for specific fields (Year, Persons.PersonData.DisplayName, Source, PublicationType)
+4. **`get_publication_details`**: Get detailed information about a publication using its ID
+5. **`get_database_summary`**: Get overview of database contents with totals and statistics
 
 ## Test Questions
 
@@ -105,23 +105,53 @@ Try these example queries to test the agent:
 
 ## Current Status
 
-### ✅ Working Features
-- Plan-and-execute workflow with LangGraph
-- Streaming chat interface
-- Elasticsearch integration with proper field mapping
-- Error handling and debugging tools
-- Clean response formatting
+### ✅ **Working Features**
+- **Plan-and-Execute Workflow**: LangGraph-based multi-step planning and execution
+- **Streaming Chat Interface**: Real-time updates with step-by-step progress
+- **Elasticsearch Integration**: Proper field mapping and search functionality
+- **Error Handling**: Comprehensive error recovery and debugging tools
+- **Clean Response Formatting**: User-friendly output instead of raw JSON
+- **Tool Documentation**: Enhanced agent knowledge of available tools
 
-### ⚠️ Known Limitations
-- **Single-message only**: No conversation memory between messages
-- **No pagination**: Limited to 10 results per tool call
-- **Tool knowledge gaps**: Agent has minimal information about tool capabilities
+### ⚠️ **Known Limitations**
+- **Single-Message Only**: No conversation memory between messages
+- **No Pagination**: Limited to 10 results per tool call
+- **Premature Completion**: Agent sometimes completes tasks before fully addressing user requests
+- **No ORCID Extraction**: Publication details don't contain ORCID information
 
-### 🔧 Planned Improvements
-1. **Enhanced Tool Documentation**: Improve agent knowledge of tool parameters and output formats
-2. **Conversation Memory**: Add support for multi-turn conversations
-3. **Pagination Support**: Handle large result sets
-4. **Better Error Handling**: More graceful handling of edge cases
+### 🔧 **Recent Improvements**
+- **Fixed Workflow Routing**: Removed forced replan cycles, agent now completes tasks efficiently
+- **Enhanced Output Formatting**: Users see clean answers instead of raw state objects
+- **Corrected Field Names**: Updated search tools to use actual Elasticsearch schema
+- **Better Tool Descriptions**: Added parameter specifications and output format details
+
+## Technical Implementation
+
+### LangGraph Workflow
+
+The agent uses a sophisticated plan-and-execute pattern:
+
+1. **Planning**: Generate multi-step research plan
+2. **Execution**: Execute tools and gather results
+3. **Completion Detection**: Determine when task is complete
+4. **Response Formatting**: Format results for user presentation
+
+### Elasticsearch Schema
+
+The system works with the following field structure:
+- **Authors**: `Persons.PersonData.DisplayName` (not `authors`)
+- **Journal**: `Source` (not `journal`)
+- **Type**: `PublicationType` (not `publication_type`)
+- **Year**: `Year`
+- **Title**: `Title`
+- **Abstract**: `Abstract`
+
+### Tool Integration
+
+Each tool provides:
+- **Parameter specifications**: Clear input requirements
+- **Output format**: JSON structure documentation
+- **Error handling**: Graceful failure modes
 
 ## Development
 
@@ -130,11 +160,18 @@ Try these example queries to test the agent:
 es_workspace/
 ├── src/research_agent/           # Core research agent
 │   ├── core/                     # Workflow and models
+│   │   ├── workflow.py           # LangGraph plan-and-execute
+│   │   ├── models.py             # Pydantic models
+│   │   └── state.py              # State management
 │   ├── tools/                    # Elasticsearch tools
+│   │   └── elasticsearch_tools.py
 │   └── agents/                   # Legacy agent components
 ├── streamlit_app.py              # Main Streamlit application
 ├── streamlit_agent.py            # Streamlit-agent bridge
 ├── tests/                        # Test files
+│   ├── test_workflow_routing.py  # Workflow tests
+│   ├── test_fixed_search_tools.py # Tool tests
+│   └── test_pydantic_fix.py      # Model tests
 ├── docs/                         # Documentation
 ├── examples/                     # Example notebooks
 ├── bin/                          # Deprecated files
@@ -151,51 +188,71 @@ python -m pytest tests/ -v
 python -m pytest tests/test_workflow_routing.py -v
 python -m pytest tests/test_fixed_search_tools.py -v
 
-# Test Streamlit integration
-python tests/test_streamlit_integration.py
+# Test search tools functionality
+python tests/test_anna_dubois_search.py
 ```
 
 ### Debug Mode
 
 Enable debug mode in the Streamlit app to see:
-- Raw event streams
-- Response processing
-- Error details
-- System information
+- Raw event streams from LangGraph
+- Tool execution details
+- Error tracebacks
+- System status information
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Connection Error**: Check your `.env` file and Elasticsearch credentials
-2. **LiteLLM Error**: Verify LITELLM_API_KEY and LITELLM_BASE_URL
+2. **LiteLLM Error**: Verify `LITELLM_API_KEY` and `LITELLM_BASE_URL`
 3. **Import Error**: Ensure all dependencies are installed in the virtual environment
 4. **Tool Errors**: Check the debug panel for detailed error information
+5. **Empty Results**: Verify field names match Elasticsearch schema
 
 ### Debug Information
 
 The Streamlit app provides comprehensive debug information:
-- Event stream processing
-- Tool execution results
-- Error tracebacks
-- System status
+- Event stream processing details
+- Tool execution results and timing
+- Error tracebacks with context
+- Agent state and workflow progress
 
-## Next Steps
+## Implementation History
 
-### Short-term (Current Focus)
-1. **Tool Documentation Enhancement**: Improve agent knowledge of available tools
-2. **Output Format Improvements**: Better response formatting for different query types
-3. **Completion Logic Refinement**: More accurate task completion detection
+### Major Milestones
+- **Initial Implementation**: LangGraph plan-and-execute workflow
+- **Elasticsearch Integration**: Connected search tools with proper schema
+- **Streamlit Interface**: Interactive chat with streaming updates
+- **Workflow Fixes**: Corrected routing and completion logic
+- **Tool Enhancement**: Updated descriptions and field mappings
+
+### Key Fixes Applied
+1. **Workflow Routing**: Removed forced replan cycles
+2. **Output Formatting**: Clean user responses instead of raw JSON
+3. **Field Mapping**: Corrected Elasticsearch field names
+4. **Tool Documentation**: Enhanced agent knowledge of capabilities
+5. **Async/Sync Issues**: Fixed LiteLLM compatibility
+
+## Future Enhancements
+
+### Short-term (Next Version)
+1. **Conversation Memory**: Support for multi-turn conversations
+2. **Pagination Support**: Handle large result sets effectively
+3. **ORCID Integration**: Extract author identifiers from publications
+4. **Better Completion Logic**: More accurate task completion detection
 
 ### Medium-term
-1. **Pagination Support**: Handle large result sets effectively
-2. **Conversation Memory**: Multi-turn conversation support
-3. **Advanced Search Features**: More sophisticated query capabilities
+1. **Advanced Search Features**: More sophisticated query capabilities
+2. **Result Export**: Save conversations and research results
+3. **Performance Optimization**: Caching and query optimization
+4. **Enhanced Error Recovery**: Better handling of edge cases
 
 ### Long-term
 1. **Multi-database Support**: Extend beyond Elasticsearch
 2. **Advanced Analytics**: Visualization and trend analysis
 3. **API Interface**: REST API for programmatic access
+4. **User Management**: Authentication and session persistence
 
 ## Contributing
 
@@ -208,3 +265,9 @@ The Streamlit app provides comprehensive debug information:
 ## License
 
 This project is for research and educational purposes.
+
+---
+
+**Current Status**: ✅ **Production-Ready MVP with Enhanced Tool Integration**  
+**Repository**: https://github.com/wikefjol/db_chat.git  
+**Last Updated**: Recent tool documentation and workflow routing improvements
