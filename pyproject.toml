@@ -102,6 +102,7 @@ markers = [
     "unit: marks tests as unit tests",
     "elasticsearch: marks tests that require Elasticsearch",
     "openai: marks tests that require OpenAI API",
+    "asyncio: marks tests as async tests",
 ]
 
 [tool.coverage.run]

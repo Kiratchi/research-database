@@ -7,21 +7,23 @@ handling async operations, session state, and streaming updates.
 
 import asyncio
 import streamlit as st
-from typing import Dict, Any, Optional, AsyncIterator
+from typing import Dict, Any, Optional, AsyncIterator, List
 from datetime import datetime
 import traceback
 from elasticsearch import Elasticsearch
 
 from src.research_agent.core.workflow import ResearchAgent
+from src.research_agent.core.hybrid_router import HybridRouter
 
 
 class StreamlitAgent:
     """
-    Bridge between Streamlit and ResearchAgent that handles:
+    Bridge between Streamlit and HybridRouter that handles:
     - Async operations in Streamlit context
     - Session state management
     - Streaming updates
     - Error handling
+    - Query classification and routing
     """
     
     def __init__(self, es_client: Optional[Elasticsearch] = None, 
@@ -35,67 +37,81 @@ class StreamlitAgent:
         """
         self.es_client = es_client
         self.index_name = index_name
-        self.research_agent = None
+        self.hybrid_router = None
+        self.research_agent = None  # Keep for backward compatibility
         self._initialize_agent()
     
     def _initialize_agent(self):
-        """Initialize the ResearchAgent."""
+        """Initialize the HybridRouter and ResearchAgent."""
         try:
+            # Initialize hybrid router
+            self.hybrid_router = HybridRouter(
+                es_client=self.es_client,
+                index_name=self.index_name
+            )
+            
+            # Initialize legacy research agent for backward compatibility
             self.research_agent = ResearchAgent(
                 es_client=self.es_client,
                 index_name=self.index_name,
                 recursion_limit=50
             )
         except Exception as e:
-            st.error(f"Failed to initialize ResearchAgent: {str(e)}")
+            st.error(f"Failed to initialize agents: {str(e)}")
+            self.hybrid_router = None
             self.research_agent = None
     
     def is_initialized(self) -> bool:
         """Check if the agent is properly initialized."""
-        return self.research_agent is not None
+        return self.hybrid_router is not None and self.hybrid_router.is_initialized()
     
-    def process_query(self, query: str) -> Dict[str, Any]:
+    def get_memory_summary(self) -> Dict[str, Any]:
+        """Get a summary of the current conversation memory state."""
+        if self.hybrid_router:
+            return self.hybrid_router.get_memory_summary()
+        return {"total_messages": 0, "user_messages": 0, "ai_messages": 0, "memory_buffer": None}
+    
+    def clear_memory(self):
+        """Clear the conversation memory."""
+        if self.hybrid_router:
+            self.hybrid_router.clear_memory()
+    
+    def get_conversation_memory(self):
+        """Get direct access to the conversation memory instance."""
+        if self.hybrid_router:
+            return self.hybrid_router.get_conversation_memory()
+        return None
+    
+    def process_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
-        Process a query through the ResearchAgent.
+        Process a query through the HybridRouter with LangChain Memory.
         
         Args:
             query: Natural language query
+            conversation_history: Optional conversation history for initialization (deprecated - use LangChain memory instead)
             
         Returns:
             Dictionary containing result and metadata
         """
-        if not self.research_agent:
+        if not self.hybrid_router:
             return {
                 'success': False,
-                'error': 'ResearchAgent not initialized',
+                'error': 'HybridRouter not initialized',
                 'response': None,
                 'metadata': {}
             }
         
         try:
-            # Execute the query using sync version to avoid async issues
-            from src.research_agent.core.workflow import run_research_query
+            # Use hybrid router for intelligent query processing
+            # conversation_history is mainly for backwards compatibility and initial memory setup
+            result = self.hybrid_router.process_query(query, conversation_history)
             
-            result = run_research_query(
-                query,
-                self.es_client,
-                self.index_name,
-                50,  # recursion_limit
-                False  # stream
-            )
+            # Add memory information to result metadata
+            if result.get('success', False):
+                memory_summary = self.get_memory_summary()
+                result.setdefault('metadata', {})['memory_summary'] = memory_summary
             
-            return {
-                'success': True,
-                'error': None,
-                'response': result.get('response', 'No response generated'),
-                'metadata': {
-                    'plan': result.get('plan', []),
-                    'past_steps': result.get('past_steps', []),
-                    'total_results': result.get('total_results'),
-                    'current_step': result.get('current_step', 0),
-                    'session_id': result.get('session_id')
-                }
-            }
+            return result
             
         except Exception as e:
             return {
@@ -106,59 +122,33 @@ class StreamlitAgent:
                 'traceback': traceback.format_exc()
             }
     
-    async def stream_query(self, query: str) -> AsyncIterator[Dict[str, Any]]:
+    async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> AsyncIterator[Dict[str, Any]]:
         """
-        Stream a query execution with real-time updates.
+        Stream a query execution with real-time updates and LangChain Memory.
         
         Args:
             query: Natural language query
+            conversation_history: Optional conversation history for initialization (deprecated - use LangChain memory instead)
             
         Yields:
             Dictionary containing streaming updates
         """
-        if not self.research_agent:
+        if not self.hybrid_router:
             yield {
                 'type': 'error',
-                'content': 'ResearchAgent not initialized',
+                'content': 'HybridRouter not initialized',
                 'timestamp': datetime.now()
             }
             return
         
         try:
-            async for event in self.research_agent.stream_query(query):
-                # Process different types of events
-                for node_name, node_data in event.items():
-                    if node_name == "__end__":
-                        yield {
-                            'type': 'final',
-                            'content': node_data,
-                            'timestamp': datetime.now()
-                        }
-                    elif node_name == "planner":
-                        yield {
-                            'type': 'plan',
-                            'content': node_data.get('plan', []),
-                            'timestamp': datetime.now()
-                        }
-                    elif node_name == "agent":
-                        yield {
-                            'type': 'execution',
-                            'content': node_data,
-                            'timestamp': datetime.now()
-                        }
-                    elif node_name == "replan":
-                        yield {
-                            'type': 'replan',
-                            'content': node_data,
-                            'timestamp': datetime.now()
-                        }
-                    else:
-                        yield {
-                            'type': 'step',
-                            'content': node_data,
-                            'node': node_name,
-                            'timestamp': datetime.now()
-                        }
+            # Stream through hybrid router with memory support
+            async for event in self.hybrid_router.stream_query(query, conversation_history):
+                # Add memory information to final events
+                if event.get('type') == 'final':
+                    memory_summary = self.get_memory_summary()
+                    event.setdefault('metadata', {})['memory_summary'] = memory_summary
+                yield event
                         
         except Exception as e:
             yield {
@@ -168,19 +158,20 @@ class StreamlitAgent:
                 'traceback': traceback.format_exc()
             }
     
-    def run_sync_query(self, query: str) -> Dict[str, Any]:
+    def run_sync_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
-        Run a query synchronously using asyncio.
+        Run a query synchronously using the hybrid router with LangChain Memory.
         
         Args:
             query: Natural language query
+            conversation_history: Optional conversation history for initialization (deprecated - use LangChain memory instead)
             
         Returns:
             Query result
         """
         try:
-            # Direct sync query - no async needed
-            return self.process_query(query)
+            # Direct sync query through hybrid router
+            return self.process_query(query, conversation_history)
             
         except Exception as e:
             return {
@@ -198,18 +189,39 @@ class StreamlitAgent:
         Returns:
             Dictionary containing agent information
         """
-        if not self.research_agent:
+        if not self.hybrid_router:
             return {
                 'initialized': False,
-                'error': 'ResearchAgent not initialized'
+                'error': 'HybridRouter not initialized'
             }
         
+        router_info = self.hybrid_router.get_router_info()
+        
         return {
-            'initialized': True,
-            'es_client_connected': self.es_client is not None and self.es_client.ping() if self.es_client else False,
-            'index_name': self.index_name,
-            'recursion_limit': self.research_agent.recursion_limit
+            'initialized': router_info['initialized'],
+            'es_client_connected': router_info['es_client_connected'],
+            'index_name': router_info['index_name'],
+            'hybrid_router_enabled': True,
+            'research_agent_initialized': router_info['research_agent_initialized'],
+            'performance_stats': router_info['performance_stats'],
+            'recursion_limit': 50  # Default value
         }
+    
+    def get_processing_message(self, query: str, conversation_history: Optional[List[Dict]] = None) -> str:
+        """
+        Get appropriate processing message for user feedback.
+        
+        Args:
+            query: Natural language query
+            conversation_history: Recent conversation history for context
+            
+        Returns:
+            Processing message string
+        """
+        if not self.hybrid_router:
+            return "🔍 Processing query..."
+        
+        return self.hybrid_router.get_processing_message(query, conversation_history)
 
 
 def get_streamlit_agent() -> StreamlitAgent:

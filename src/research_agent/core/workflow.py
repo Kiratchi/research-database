@@ -48,7 +48,7 @@ def create_research_workflow(
     
     # Choose the LLM that will drive the agent - using LiteLLM proxy
     llm = ChatLiteLLM(
-        model="anthropic/claude-sonet-4",  # Use Claude Sonet 4 for complex reasoning
+        model="anthropic/claude-sonnet-4",  # Use Claude Sonnet 4 for complex reasoning
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0
@@ -85,7 +85,7 @@ Focus on using these tools effectively for research publication queries.""",
     
     # Create a separate LLM instance for replanner (could use different model for efficiency)
     replanner_llm = ChatLiteLLM(
-        model="anthropic/claude-haiku-3.5",  # Use faster model for replanning
+        model="anthropic/claude-sonet-3.7",  # Use faster model for replanning
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0

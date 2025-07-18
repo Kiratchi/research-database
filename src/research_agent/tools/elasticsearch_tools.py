@@ -32,6 +32,7 @@ class SearchPublicationsInput(BaseModel):
     """Input schema for searching publications."""
     query: str = Field(description="Search query string")
     max_results: int = Field(default=10, description="Maximum number of results to return")
+    offset: int = Field(default=0, description="Number of results to skip for pagination")
     fields: Optional[List[str]] = Field(default=None, description="Specific fields to search in")
 
 
@@ -40,6 +41,7 @@ class SearchByAuthorInput(BaseModel):
     author_name: str = Field(description="Author name to search for")
     strategy: str = Field(default="partial", description="Search strategy: exact, partial, or fuzzy")
     max_results: int = Field(default=10, description="Maximum number of results to return")
+    offset: int = Field(default=0, description="Number of results to skip for pagination")
 
 
 class GetFieldStatisticsInput(BaseModel):
@@ -54,23 +56,24 @@ class GetPublicationDetailsInput(BaseModel):
 
 
 # Core search functions compatible with ES 6.8.23
-def search_publications(query: str, max_results: int = 10, fields: Optional[List[str]] = None) -> str:
+def search_publications(query: str, max_results: int = 10, offset: int = 0, fields: Optional[List[str]] = None) -> str:
     """
-    Search publications using full-text search.
+    Search publications using full-text search with pagination support.
     
     Args:
         query: Search query string
         max_results: Maximum number of results to return
+        offset: Number of results to skip for pagination
         fields: Specific fields to search in
         
     Returns:
-        JSON string with search results
+        JSON string with search results including pagination info
     """
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        # Build search query compatible with ES 6.8.23
+        # Build search query compatible with ES 6.8.23 with pagination
         search_body = {
             "query": {
                 "multi_match": {
@@ -81,6 +84,7 @@ def search_publications(query: str, max_results: int = 10, fields: Optional[List
                 }
             },
             "size": max_results,
+            "from": offset,
             "sort": [{"_score": {"order": "desc"}}]
         }
         
@@ -112,27 +116,39 @@ def search_publications(query: str, max_results: int = 10, fields: Optional[List
             }
             results.append(result)
         
+        total_hits = response['hits']['total']
+        # Handle both ES 6.x and 7.x total hit formats
+        if isinstance(total_hits, dict):
+            total_hits = total_hits.get('value', total_hits.get('count', 0))
+        
         return json.dumps({
-            "total_hits": response['hits']['total'],
+            "total_hits": total_hits,
             "results": results,
-            "query": query
+            "query": query,
+            "pagination": {
+                "offset": offset,
+                "limit": max_results,
+                "has_more": offset + max_results < total_hits,
+                "next_offset": offset + max_results if offset + max_results < total_hits else None
+            }
         })
         
     except Exception as e:
         return json.dumps({"error": f"Search failed: {str(e)}"})
 
 
-def search_by_author(author_name: str, strategy: str = "partial", max_results: int = 10) -> str:
+def search_by_author(author_name: str, strategy: str = "partial", max_results: int = 10, offset: int = 0) -> str:
     """
-    Search publications by author name with different strategies.
+    Search publications by author name with different strategies and pagination support.
     
     Args:
         author_name: Author name to search for
         strategy: Search strategy (exact, partial, fuzzy)
         max_results: Maximum number of results to return
+        offset: Number of results to skip for pagination
         
     Returns:
-        JSON string with search results
+        JSON string with search results including pagination info
     """
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
@@ -164,6 +180,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         search_body = {
             "query": query,
             "size": max_results,
+            "from": offset,
             "sort": [{"year": {"order": "desc"}}]
         }
         
@@ -176,7 +193,8 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
             # Fallback: Try without sorting if sorting fails due to mapping issues
             search_body = {
                 "query": query,
-                "size": max_results
+                "size": max_results,
+                "from": offset
             }
             response = _es_client.search(
                 index=_index_name,
@@ -207,11 +225,22 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
             }
             results.append(result)
         
+        total_hits = response['hits']['total']
+        # Handle both ES 6.x and 7.x total hit formats
+        if isinstance(total_hits, dict):
+            total_hits = total_hits.get('value', total_hits.get('count', 0))
+        
         return json.dumps({
-            "total_hits": response['hits']['total'],
+            "total_hits": total_hits,
             "results": results,
             "author": author_name,
-            "strategy": strategy
+            "strategy": strategy,
+            "pagination": {
+                "offset": offset,
+                "limit": max_results,
+                "has_more": offset + max_results < total_hits,
+                "next_offset": offset + max_results if offset + max_results < total_hits else None
+            }
         })
         
     except Exception as e:
@@ -399,15 +428,15 @@ def create_elasticsearch_tools() -> List[BaseTool]:
     tools = [
         Tool(
             name="search_publications",
-            description="Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields. Parameters: query (string), max_results (int, default=10), fields (optional list of strings). Returns JSON with total_hits (int), results (list of objects with id, score, title, authors, year, abstract), and query (string).",
-            func=lambda query: search_publications(query, max_results=10),
+            description="Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields. Parameters: query (string), max_results (int, default=10), offset (int, default=0), fields (optional list of strings). Returns JSON with total_hits (int), results (list of objects with id, score, title, authors, year, abstract), query (string), and pagination info (offset, limit, has_more, next_offset).",
+            func=lambda query, max_results=10, offset=0, fields=None: search_publications(query, max_results, offset, fields),
             args_schema=SearchPublicationsInput
         ),
         
         Tool(
             name="search_by_author",
-            description="Search publications by author name in Persons.PersonData.DisplayName field. Parameters: author_name (string), strategy (string: 'exact' for phrase match, 'partial' for default match, 'fuzzy' for typo-tolerant search), max_results (int, default=10). Returns JSON with total_hits (int), results (list of objects with id, title, authors, year, journal, publication_type, abstract), author (string), and strategy (string).",
-            func=lambda author_name, strategy="partial": search_by_author(author_name, strategy, max_results=10),
+            description="Search publications by author name in Persons.PersonData.DisplayName field. Parameters: author_name (string), strategy (string: 'exact' for phrase match, 'partial' for default match, 'fuzzy' for typo-tolerant search), max_results (int, default=10), offset (int, default=0). Returns JSON with total_hits (int), results (list of objects with id, title, authors, year, journal, publication_type, abstract), author (string), strategy (string), and pagination info (offset, limit, has_more, next_offset).",
+            func=lambda author_name, strategy="partial", max_results=10, offset=0: search_by_author(author_name, strategy, max_results, offset),
             args_schema=SearchByAuthorInput
         ),
         

@@ -32,14 +32,21 @@ Do not add any superfluous steps. The result of the final step should be the fin
 Make sure that each step has all the information needed - do not skip steps.
 
 Available tools for research publications:
-- search_publications: Search for publications by topic, keywords, or filters
-- search_by_author: Search for publications by a specific author
-- get_more_results: Get additional pages from a previous search
+- search_publications: Search for publications by topic, keywords, or filters (supports pagination with offset parameter)
+- search_by_author: Search for publications by a specific author (supports pagination with offset parameter)
 - get_field_statistics: Analyze field distributions from search results
-- get_statistics_summary: Get overall database statistics
+- get_publication_details: Get detailed information about a specific publication
+- get_database_summary: Get overall database statistics
+
+Important pagination guidelines:
+- Both search_publications and search_by_author support pagination with offset parameter
+- Default max_results is 10, use offset to get more results (e.g., offset=10 for next page)
+- Check pagination info in results to see if more pages are available
+- For large result sets (>50 items), consider using multiple paginated calls
+- Always inform users about total results and provide pagination strategy
 
 Focus on research publication queries like:
-- Author publication counts
+- Author publication counts (may require pagination for prolific authors)
 - Topic searches with filters
 - Publication statistics and trends
 - Cross-referencing different searches"""
