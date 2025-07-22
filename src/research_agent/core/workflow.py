@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from typing import Union, List
 import os
 from dotenv import load_dotenv
+import traceback
 
 from .state import PlanExecuteState
 from ..tools.elasticsearch_tools import initialize_elasticsearch_tools, create_elasticsearch_tools
@@ -169,12 +170,80 @@ Use the available research publication tools to complete this step. Provide clea
             "past_steps": [(task, response_content)],
         }
     
+    # def plan_step(state: PlanExecuteState):
+    #     """Create the initial plan for the research query."""
+    #     # Use sync invoke to avoid async issues with LiteLLM
+    #     plan = planner.invoke({"messages": [("user", state["input"])]})
+    #     return {"plan": plan.steps}
     def plan_step(state: PlanExecuteState):
-        """Create the initial plan for the research query."""
-        # Use sync invoke to avoid async issues with LiteLLM
-        plan = planner.invoke({"messages": [("user", state["input"])]})
-        return {"plan": plan.steps}
-    
+        """Create the initial plan for the research query with conversation context."""
+        try:
+            query = state["input"]
+            print(f"🔍 Planner: Creating plan for query: {query}")
+            
+            # Get conversation history from state
+            conversation_history = state.get("conversation_history", [])
+            print(f"🔍 Planner: Conversation history available: {len(conversation_history) if conversation_history else 0} messages")
+            
+            # Build context-aware messages
+            messages = []
+            
+            # Add recent conversation context if available
+            if conversation_history and len(conversation_history) > 0:
+                # Build context from recent conversation
+                context_lines = []
+                for msg in conversation_history[-4:]:  # Last 2 exchanges (user + assistant)
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    # Truncate very long messages but keep key info
+                    truncated_content = content[:200] + "..." if len(content) > 200 else content
+                    context_lines.append(f"- {role.title()}: {truncated_content}")
+                
+                context_summary = "\n".join(context_lines)
+                
+                context_message = f"""Previous conversation context:
+    {context_summary}
+
+    Current user query: "{query}"
+
+    Based on this conversation context, create a plan to answer the user's current query. If the query refers to something from the previous conversation (like "them", "those", "it", etc.), use the context to understand what the user is referring to.
+
+    For example, if the previous conversation was about "Per-Olof Arnäs's publications" and the current query is "Name 5 of them", create a plan to find 5 publications by Per-Olof Arnäs."""
+                
+                messages.append(("user", context_message))
+                print(f"🔍 Planner: Using context-aware prompt with {len(conversation_history)} previous messages")
+            else:
+                # No context, use original query
+                messages.append(("user", query))
+                print(f"🔍 Planner: No conversation context available, using raw query")
+            
+            # Use sync invoke to avoid async issues with LiteLLM
+            plan = planner.invoke({"messages": messages})
+            
+            print(f"🔍 Planner: Raw plan result: {plan}")
+            print(f"🔍 Planner: Plan type: {type(plan)}")
+            
+            if plan is None:
+                print("❌ Planner: Plan is None - LLM likely failed to generate structured output")
+                fallback_plan = [f"Search for information about: {query}"]
+                print(f"🔄 Planner: Using fallback plan: {fallback_plan}")
+                return {"plan": fallback_plan}
+            
+            if not hasattr(plan, 'steps'):
+                print(f"❌ Planner: Plan missing 'steps' attribute. Plan object: {plan}")
+                fallback_plan = [f"Search for information about: {query}"]
+                return {"plan": fallback_plan}
+            
+            print(f"✅ Planner: Successfully created plan with {len(plan.steps)} steps: {plan.steps}")
+            return {"plan": plan.steps}
+            
+        except Exception as e:
+            print(f"❌ Planner: Exception occurred: {str(e)}")
+            print(f"❌ Planner: Full traceback: {traceback.format_exc()}")
+            fallback_plan = [f"Search for information about: {query}"]
+            print(f"🔄 Planner: Using fallback plan due to exception: {fallback_plan}")
+            return {"plan": fallback_plan}  
+          
     def replan_step(state: PlanExecuteState):
         """Replan based on the results so far."""
         # Use sync invoke to avoid async issues with LiteLLM
@@ -428,18 +497,20 @@ class ResearchAgent:
             stream
         )
     
-    async def stream_query(self, query: str) -> Any:
+    async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Any:
         """
-        Stream a research query execution.
+        Stream a research query execution with conversation context.
         
         Args:
             query: Natural language query about research publications
+            conversation_history: Previous conversation messages for context
             
         Yields:
             Intermediate results from the workflow
         """
         initial_state = {
             "input": query,
+            "conversation_history": conversation_history,  # NEW: Pass conversation context
             "plan": [],
             "past_steps": [],
             "response": None,

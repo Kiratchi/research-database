@@ -5,6 +5,7 @@
 langchain-core>=0.3.0,<0.4.0
 langchain-community>=0.3.0,<0.4.0
 langchain-openai>=0.3.0,<0.4.0
+langchain-litellm>=0.2.0,<0.3.0
 langchain>=0.3.0,<0.4.0
 
 # LangGraph - Plan-and-Execute Framework
@@ -63,3 +64,7 @@ regex>=2023.0.0,<2024.0.0
 
 # For parallel processing
 tenacity>=8.1.0,<9.0.0
+
+# Flask Dependencies
+flask>=2.3.0,<3.0.0
+flask-cors>=4.0.0,<5.0.0
