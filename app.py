@@ -227,19 +227,15 @@ class FlaskResearchAgent:
                 recursion_limit=50
             )
             
-            print("✅ Direct Agent: ResearchAgent initialized, starting stream")
             event_count = 0
             final_response = None
             
             async for event in research_agent.stream_query(query, conversation_history):
                 event_count += 1
-                print(f"📨 Direct Agent: Received event #{event_count}")
-                print(f"🔍 Direct Agent: Event structure: {list(event.keys())}")
                 
                 # Process events from LangGraph workflow
                 for node_name, node_data in event.items():
-                    print(f"🔍 Direct Agent: Processing node '{node_name}' with data keys: {list(node_data.keys()) if isinstance(node_data, dict) else 'not a dict'}")
-                    
+                   
                     # FIXED: Handle None node_data
                     if node_data is None:
                         print(f"⚠️ Direct Agent: Node '{node_name}' returned None data, skipping")
@@ -255,7 +251,6 @@ class FlaskResearchAgent:
                         print(f"🎯 Direct Agent: End node data: {node_data}")
                         
                         final_response = node_data.get('response', 'No response in end node')
-                        print(f"🎯 Direct Agent: Final response from __end__: {final_response[:200]}...")
                         
                         self.query_stats["successful_queries"] += 1
                         yield json.dumps({
@@ -269,11 +264,9 @@ class FlaskResearchAgent:
                         }) + '\n'
                         
                     elif node_name == "complete":
-                        print(f"🎯 Direct Agent: Found complete node!")
-                        print(f"🎯 Direct Agent: Complete node data: {node_data}")
+
                         
                         final_response = node_data.get('response', 'No response in complete node')
-                        print(f"🎯 Direct Agent: Final response from complete: {final_response[:200]}...")
                         
                         self.query_stats["successful_queries"] += 1
                         yield json.dumps({
@@ -287,14 +280,11 @@ class FlaskResearchAgent:
                         }) + '\n'
                         
                     elif node_name == "replan":
-                        print(f"🔄 Direct Agent: Replan data: {node_data}")
                         
                         # FIXED: Check if replan contains a final response OR a final_response
                         replan_response = node_data.get('response') or node_data.get('final_response')
                         if replan_response:
-                            print(f"🎯 Direct Agent: Found final response in replan node!")
-                            print(f"🎯 Direct Agent: Replan response: {replan_response[:200]}...")
-                            
+
                             final_response = replan_response
                             self.query_stats["successful_queries"] += 1
                             yield json.dumps({
@@ -329,8 +319,7 @@ class FlaskResearchAgent:
                         }) + '\n'
                         
                     elif node_name == "agent":
-                        print(f"🔧 Direct Agent: Agent execution data keys: {list(node_data.keys()) if isinstance(node_data, dict) else 'not a dict'}")
-                        
+
                         # Check for response in agent data
                         agent_response = node_data.get('response')
                         if agent_response:
@@ -499,7 +488,6 @@ def chat_stream():
     """Process a chat query with streaming response - DIRECT TO RESEARCH AGENT."""
     try:
         data = request.get_json()
-        print(f"🔍 Stream endpoint: Received data: {data}")
         
         if not data or 'message' not in data:
             raise BadRequest('Missing message in request')
@@ -518,8 +506,7 @@ def chat_stream():
             cleanup_old_sessions()
         
         conversation_history = session_conversations[session_id]
-        print(f"🔍 Stream endpoint: Session {session_id} has {len(conversation_history)} messages")
-        
+
         def generate():
             """Generator for Server-Sent Events."""
             response_content = ""

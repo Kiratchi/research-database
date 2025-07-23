@@ -155,8 +155,7 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         # Enforce hard limit
         actual_max = min(max_results, ContextLimits.SEARCH_PUBLICATIONS_MAX)
         
-        print(f"🔍 SEARCH_PUBLICATIONS: query='{query}', max_results={actual_max} (requested: {max_results}), offset={offset}")
-        
+    
         search_body = {
             "query": {
                 "multi_match": {
@@ -200,8 +199,7 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         if isinstance(total_hits, dict):
             total_hits = total_hits.get('value', total_hits.get('count', 0))
         
-        print(f"✅ SEARCH_PUBLICATIONS: Found {total_hits} total hits, returned {len(results)} results")
-        
+      
         # Build response with honest communication
         response_data = {
             "total_hits": total_hits,
@@ -231,7 +229,6 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         return json.dumps(response_data)
         
     except Exception as e:
-        print(f"❌ SEARCH_PUBLICATIONS: Error: {str(e)}")
         return json.dumps({
             "error": f"Search failed: {str(e)}",
             "guidance": "Try rephrasing your query or check for typos."
@@ -247,8 +244,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         # Enforce hard limit
         actual_max = min(max_results, ContextLimits.SEARCH_BY_AUTHOR_MAX)
         
-        print(f"🔍 SEARCH_BY_AUTHOR: author_name='{author_name}', strategy='{strategy}', max_results={actual_max} (requested: {max_results}), offset={offset}")
-        
+  
         # Build query based on strategy
         if strategy == "exact":
             query = {"match_phrase": {"Persons.PersonData.DisplayName": author_name}}
@@ -268,7 +264,6 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
             response = _es_client.search(index=_index_name, body=search_body)
         except Exception:
             # Fallback without sorting if field mapping issues
-            print("⚠️ SEARCH_BY_AUTHOR: Year sorting failed, trying without sort")
             search_body = {"query": query, "size": actual_max, "from": offset}
             response = _es_client.search(index=_index_name, body=search_body)
         
@@ -299,9 +294,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         total_hits = response['hits']['total']
         if isinstance(total_hits, dict):
             total_hits = total_hits.get('value', total_hits.get('count', 0))
-        
-        print(f"✅ SEARCH_BY_AUTHOR: Found {total_hits} total hits, returned {len(results)} results (offset: {offset})")
-        
+         
         # Build response with honest communication
         response_data = {
             "total_hits": total_hits,
@@ -340,7 +333,6 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         return json.dumps(response_data)
         
     except Exception as e:
-        print(f"❌ SEARCH_BY_AUTHOR: Error: {str(e)}")
         return json.dumps({
             "error": f"Author search failed: {str(e)}",
             "guidance": "Check author name spelling or try different matching strategy."
@@ -355,8 +347,6 @@ def get_field_statistics(field: str, size: int = 10) -> str:
     try:
         # This tool is ALWAYS context-safe because it uses aggregations
         actual_size = min(size, ContextLimits.FIELD_STATISTICS_MAX)
-        
-        print(f"🔍 GET_FIELD_STATISTICS: field='{field}', size={actual_size} - CONTEXT SAFE (aggregations only)")
         
         search_body = {
             "size": 0,  # NO DOCUMENTS RETURNED - ONLY AGGREGATIONS
@@ -373,9 +363,7 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         response = _es_client.search(index=_index_name, body=search_body)
         buckets = response['aggregations']['field_stats']['buckets']
         stats = [{"value": bucket['key'], "count": bucket['doc_count']} for bucket in buckets]
-        
-        print(f"✅ GET_FIELD_STATISTICS: Found {len(stats)} values for field '{field}' - ALWAYS CONTEXT SAFE")
-        
+          
         return json.dumps({
             "field": field,
             "total_documents": response['hits']['total'],
@@ -386,7 +374,6 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         })
         
     except Exception as e:
-        print(f"❌ GET_FIELD_STATISTICS: Error: {str(e)}")
         return json.dumps({
             "error": f"Statistics failed: {str(e)}",
             "guidance": "Check field name - valid options: 'Year', 'Persons.PersonData.DisplayName', 'Source', 'PublicationType'"
@@ -398,9 +385,7 @@ def get_publication_details(publication_id: str) -> str:
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
-    try:
-        print(f"🔍 GET_PUBLICATION_DETAILS: publication_id='{publication_id}' - WARNING: Large context usage")
-        
+    try:    
         response = _es_client.get(index=_index_name, id=publication_id)
         source = response['_source']
         
@@ -427,12 +412,9 @@ def get_publication_details(publication_id: str) -> str:
             "context_warning": f"Full details use ~{ContextLimits.TOKENS_PER_DETAIL} tokens - use sparingly"
         }
         
-        print(f"✅ GET_PUBLICATION_DETAILS: Retrieved details for '{details['title'][:50]}...' - LARGE CONTEXT")
-        
         return json.dumps(details)
         
     except Exception as e:
-        print(f"❌ GET_PUBLICATION_DETAILS: Error: {str(e)}")
         return json.dumps({
             "error": f"Failed to get publication details: {str(e)}",
             "guidance": "Check that publication_id is correct (obtained from search results)"
@@ -458,9 +440,7 @@ def count_entities(entity_type: str, search_term: str) -> str:
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
-    try:
-        print(f"🔍 COUNT_ENTITIES: entity_type='{entity_type}', search_term='{search_term}' - ALWAYS CONTEXT SAFE")
-        
+    try: 
         if entity_type == "authors_by_name":
             # WORKING APPROACH: Simple match query + terms aggregation
             agg_query = {
@@ -524,11 +504,9 @@ def count_entities(entity_type: str, search_term: str) -> str:
                 "guidance": "Use 'authors_by_name' for counting people with specific names"
             }
         
-        print(f"✅ COUNT_ENTITIES: Found {len(matching_authors) if entity_type == 'authors_by_name' else 0} unique individuals - CONTEXT SAFE")
         return json.dumps(result)
         
     except Exception as e:
-        print(f"❌ COUNT_ENTITIES: Error: {str(e)}")
         return json.dumps({
             "error": f"Counting failed: {str(e)}",
             "guidance": "Check search term spelling and try again"
@@ -541,7 +519,6 @@ def get_statistics_summary() -> Dict[str, Any]:
         return {"error": "Elasticsearch client not initialized"}
     
     try:
-        print(f"🔍 GET_STATISTICS_SUMMARY: Starting database overview")
         
         # Get total count
         count_response = _es_client.count(index=_index_name)
@@ -597,13 +574,10 @@ def get_statistics_summary() -> Dict[str, Any]:
             "years": years,
             "publication_types": types
         }
-        
-        print(f"✅ GET_STATISTICS_SUMMARY: Database has {total_publications} publications, {result['total_authors']} authors")
-        
+                
         return result
         
     except Exception as e:
-        print(f"❌ GET_STATISTICS_SUMMARY: Error: {str(e)}")
         return {"error": f"Failed to get statistics: {str(e)}"}
 
 
@@ -846,9 +820,7 @@ def create_elasticsearch_tools() -> List[BaseTool]:
     """Create LangChain tools from the tool registry using StructuredTool."""
     tools = []
     
-    for tool_info in TOOL_REGISTRY:
-        print(f"🔧 CREATING TOOL: {tool_info['name']} with schema: {tool_info['args_schema']}")
-        
+    for tool_info in TOOL_REGISTRY:     
         # FIXED: Use StructuredTool instead of Tool for multi-parameter support
         if tool_info["args_schema"] is not None:
             tool = StructuredTool(
@@ -866,7 +838,6 @@ def create_elasticsearch_tools() -> List[BaseTool]:
             )
         
         tools.append(tool)
-        print(f"✅ CREATED TOOL: {tool_info['name']} successfully")
     
     return tools
 
