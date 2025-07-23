@@ -16,19 +16,31 @@ from dotenv import load_dotenv
 import traceback
 
 from .state import PlanExecuteState
-from ..tools.elasticsearch_tools import initialize_elasticsearch_tools, create_elasticsearch_tools
-
+from ..tools.elasticsearch_tools import (
+    initialize_elasticsearch_tools, 
+    create_elasticsearch_tools,
+    get_tool_descriptions_for_planning,
+    get_tool_descriptions_for_execution
+)
 
 # Import models from models.py
 from .models import Plan, Response, Act
 
+from .prompt_loader import (
+    get_executor_prompt,
+    get_planner_system_prompt, 
+    get_replanner_prompt,
+    get_task_format_template,
+    get_context_aware_prompt,
+    get_standard_planning_prompt
+)
 
 def create_research_workflow(
     es_client=None,
     index_name: str = "research-publications-static"
 ) -> StateGraph:
     """
-    Create the main research agent workflow using LangGraph.
+    Create the main research agent workflow with dynamic tool descriptions.
     
     Args:
         es_client: Elasticsearch client instance
@@ -44,146 +56,118 @@ def create_research_workflow(
     # Get tools for the executor
     tools = create_elasticsearch_tools()
     
+    print(f"🔧 TOOLS DEBUG:")
+    for tool in tools:
+        print(f"  - Tool: {tool.name}")
+        print(f"    Description: {tool.description[:200]}...")
+        if hasattr(tool, 'args_schema') and tool.args_schema:
+            print(f"    Args schema: {tool.args_schema}")
+            # Try to show the actual parameters
+            if hasattr(tool.args_schema, 'model_fields'):
+                print(f"    Parameters: {list(tool.args_schema.model_fields.keys())}")
+            elif hasattr(tool.args_schema, '__fields__'):
+                print(f"    Parameters: {list(tool.args_schema.__fields__.keys())}")
+        else:
+            print(f"    Args schema: None")
+        print()
+
+    # Get dynamic tool descriptions
+    planning_tool_descriptions = get_tool_descriptions_for_planning()
+    execution_tool_descriptions = get_tool_descriptions_for_execution()
+    
     # Load environment variables for LiteLLM
     load_dotenv()
     
-    # Choose the LLM that will drive the agent - using LiteLLM proxy
+    # Choose the LLM that will drive the agent
     llm = ChatLiteLLM(
-        model="anthropic/claude-sonnet-4",  # Use Claude Sonnet 4 for complex reasoning
+        model="anthropic/claude-sonnet-4",
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0
     )
     
-    # Create the execution agent using langgraph prebuilt
-    agent_executor = create_react_agent(
-        llm, 
-        tools, 
-        prompt="You are a helpful research assistant. Use the available tools to search and analyze research publications."
-    )
+    # Create the execution agent with external prompt
+    executor_prompt = get_executor_prompt(execution_tool_descriptions)
+    agent_executor = create_react_agent(llm, tools, prompt=executor_prompt)
     
-    # Create planner following DEMO patterns
+    # Create planner with external prompt
+    planner_system_prompt = get_planner_system_prompt(planning_tool_descriptions)
     planner_prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            """For the given objective, come up with a simple step by step plan for searching research publications. \
-This plan should involve individual tasks using the available tools, that if executed correctly will yield the correct answer. Do not add any superfluous steps. \
-The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
-
-Available tools:
-- search_publications: Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
-- search_by_author: Search publications by author name in Persons.PersonData.DisplayName field
-- get_field_statistics: Get statistics for specific fields (valid fields: Year, Persons.PersonData.DisplayName, Source, PublicationType)
-- get_publication_details: Get detailed information about a publication using its ID
-- get_database_summary: Get database summary statistics
-
-Focus on using these tools effectively for research publication queries.""",
-        ),
+        ("system", planner_system_prompt),
         ("placeholder", "{messages}"),
     ])
-    
     planner = planner_prompt | llm.with_structured_output(Plan)
     
-    # Create a separate LLM instance for replanner (could use different model for efficiency)
+    # Create replanner with external prompt
     replanner_llm = ChatLiteLLM(
-        model="anthropic/claude-sonet-3.7",  # Use faster model for replanning
+        model="anthropic/claude-sonet-3.7",
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0
     )
     
-    # Create replanner following DEMO patterns
-    replanner_prompt = ChatPromptTemplate.from_template(
-        """For the given objective, come up with a simple step by step plan for searching research publications. \
-This plan should involve individual tasks using the available tools, that if executed correctly will yield the correct answer. Do not add any superfluous steps. \
-The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.
-
-Your objective was this:
-{input}
-
-Your original plan was this:
-{plan}
-
-You have currently done the follow steps:
-{past_steps}
-
-Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan.
-
-Available tools:
-- search_publications: Search research publications using full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
-- search_by_author: Search publications by author name in Persons.PersonData.DisplayName field
-- get_field_statistics: Get statistics for specific fields (valid fields: Year, Persons.PersonData.DisplayName, Source, PublicationType)
-- get_publication_details: Get detailed information about a publication using its ID
-- get_database_summary: Get database summary statistics
-
-IMPORTANT: You must respond with either:
-1. action_type: "response" with a final response to the user
-2. action_type: "plan" with a list of remaining steps
-
-Do not mix response and plan fields. Choose one action type only.
-
-RESPONSE FORMATTING GUIDELINES:
-- Provide direct, concise answers to the user's specific question
-- Include the most relevant information prominently
-- Use clear formatting (bullet points, numbering, headers) when appropriate
-- Avoid unnecessary technical details about search processes
-- Focus on actionable information the user can use"""
-    )
-    
+    replanner_template = get_replanner_prompt(planning_tool_descriptions)
+    replanner_prompt = ChatPromptTemplate.from_template(replanner_template)
     replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
     
-    # Define workflow steps following DEMO patterns
+    # Define workflow steps with enhanced logic
     def execute_step(state: PlanExecuteState):
         """Execute the current step using the research tools."""
         plan = state["plan"]
+        past_steps = state.get("past_steps", [])
+        
+        print(f"🔧 EXECUTE_STEP DEBUG:")
+        print(f"  - Plan length: {len(plan)}")
+        print(f"  - Past steps length: {len(past_steps)}")
+        print(f"  - Current plan: {plan}")
+        print(f"  - Past steps: {[step[0] for step in past_steps]}")  # Just the task names
+        
+        if not plan:
+            print("❌ EXECUTE_STEP: No plan available!")
+            return {"past_steps": []}
+        
         plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan))
         task = plan[0]
         
-        # Check if this is a simple query that can be completed in one step
+        print(f"🎯 EXECUTE_STEP: About to execute task: {task}")
+        
         original_query = state.get("input", "")
         
-        # General prompting for all query types
-        task_formatted = f"""Original query: {original_query}
-
-Current plan:
-{plan_str}
-
-You are executing: {task}
-
-Use the available research publication tools to complete this step. Provide clear, specific answers that directly address the user's question. If you need additional information to fully answer the query, continue with the next step in the plan."""
-        
-        # Use sync invoke to avoid async issues with LiteLLM
-        agent_response = agent_executor.invoke(
-            {"messages": [("user", task_formatted)]}
+        # Use external prompt template
+        task_formatted = get_task_format_template(
+            original_query=original_query,
+            plan_str=plan_str,
+            task=task
         )
         
-        response_content = agent_response["messages"][-1].content
+        print(f"📝 EXECUTE_STEP: Sending formatted task to agent...")
         
-        # Check if this response seems to fully answer the original query
-        if ("total publications" in response_content.lower() or 
-            "publications found" in response_content.lower() or
-            ("has published" in response_content.lower() and "publications" in response_content.lower())):
-            # This might be a complete answer - let the routing decide
-            pass
-        
-        return {
-            "past_steps": [(task, response_content)],
-        }
-    
-    # def plan_step(state: PlanExecuteState):
-    #     """Create the initial plan for the research query."""
-    #     # Use sync invoke to avoid async issues with LiteLLM
-    #     plan = planner.invoke({"messages": [("user", state["input"])]})
-    #     return {"plan": plan.steps}
+        # Use sync invoke to avoid async issues with LiteLLM
+        try:
+            agent_response = agent_executor.invoke(
+                {"messages": [("user", task_formatted)]}
+            )
+            
+            response_content = agent_response["messages"][-1].content
+            print(f"✅ EXECUTE_STEP: Agent response length: {len(response_content)} characters")
+            print(f"📄 EXECUTE_STEP: Agent response preview: {response_content[:200]}...")
+            
+            return {
+                "past_steps": [(task, response_content)],
+            }
+        except Exception as e:
+            print(f"❌ EXECUTE_STEP: Exception during agent execution: {str(e)}")
+            return {"past_steps": [(task, f"Error executing task: {str(e)}")]}
+            
     def plan_step(state: PlanExecuteState):
         """Create the initial plan for the research query with conversation context."""
         try:
             query = state["input"]
-            print(f"🔍 Planner: Creating plan for query: {query}")
+            print(f"🔍 Enhanced Planner: Creating plan for query: {query}")
             
             # Get conversation history from state
             conversation_history = state.get("conversation_history", [])
-            print(f"🔍 Planner: Conversation history available: {len(conversation_history) if conversation_history else 0} messages")
+            print(f"🔍 Enhanced Planner: Conversation history available: {len(conversation_history) if conversation_history else 0} messages")
             
             # Build context-aware messages
             messages = []
@@ -192,7 +176,7 @@ Use the available research publication tools to complete this step. Provide clea
             if conversation_history and len(conversation_history) > 0:
                 # Build context from recent conversation
                 context_lines = []
-                for msg in conversation_history[-4:]:  # Last 2 exchanges (user + assistant)
+                for msg in conversation_history[-4:]:  # Last 2 exchanges
                     role = msg.get('role', 'unknown')
                     content = msg.get('content', '')
                     # Truncate very long messages but keep key info
@@ -201,125 +185,119 @@ Use the available research publication tools to complete this step. Provide clea
                 
                 context_summary = "\n".join(context_lines)
                 
-                context_message = f"""Previous conversation context:
-    {context_summary}
-
-    Current user query: "{query}"
-
-    Based on this conversation context, create a plan to answer the user's current query. If the query refers to something from the previous conversation (like "them", "those", "it", etc.), use the context to understand what the user is referring to.
-
-    For example, if the previous conversation was about "Per-Olof Arnäs's publications" and the current query is "Name 5 of them", create a plan to find 5 publications by Per-Olof Arnäs."""
-                
+                # Use external context-aware prompt
+                context_message = get_context_aware_prompt(context_summary, query)
                 messages.append(("user", context_message))
-                print(f"🔍 Planner: Using context-aware prompt with {len(conversation_history)} previous messages")
+                print(f"🔍 Enhanced Planner: Using context-aware prompt with {len(conversation_history)} previous messages")
             else:
-                # No context, use original query
-                messages.append(("user", query))
-                print(f"🔍 Planner: No conversation context available, using raw query")
+                # Use external standard planning prompt
+                standard_message = get_standard_planning_prompt(query)
+                messages.append(("user", standard_message))
+                print(f"🔍 Enhanced Planner: No conversation context available, using standard planning approach")
             
             # Use sync invoke to avoid async issues with LiteLLM
             plan = planner.invoke({"messages": messages})
             
-            print(f"🔍 Planner: Raw plan result: {plan}")
-            print(f"🔍 Planner: Plan type: {type(plan)}")
+            print(f"🔍 Enhanced Planner: Raw plan result: {plan}")
+            print(f"🔍 Enhanced Planner: Plan type: {type(plan)}")
             
             if plan is None:
-                print("❌ Planner: Plan is None - LLM likely failed to generate structured output")
+                print("❌ Enhanced Planner: Plan is None - LLM likely failed to generate structured output")
                 fallback_plan = [f"Search for information about: {query}"]
-                print(f"🔄 Planner: Using fallback plan: {fallback_plan}")
+                print(f"🔄 Enhanced Planner: Using fallback plan: {fallback_plan}")
                 return {"plan": fallback_plan}
             
             if not hasattr(plan, 'steps'):
-                print(f"❌ Planner: Plan missing 'steps' attribute. Plan object: {plan}")
+                print(f"❌ Enhanced Planner: Plan missing 'steps' attribute. Plan object: {plan}")
                 fallback_plan = [f"Search for information about: {query}"]
                 return {"plan": fallback_plan}
             
-            print(f"✅ Planner: Successfully created plan with {len(plan.steps)} steps: {plan.steps}")
+            print(f"✅ Enhanced Planner: Successfully created plan with {len(plan.steps)} steps: {plan.steps}")
             return {"plan": plan.steps}
             
         except Exception as e:
-            print(f"❌ Planner: Exception occurred: {str(e)}")
-            print(f"❌ Planner: Full traceback: {traceback.format_exc()}")
+            print(f"❌ Enhanced Planner: Exception occurred: {str(e)}")
+            print(f"❌ Enhanced Planner: Full traceback: {traceback.format_exc()}")
             fallback_plan = [f"Search for information about: {query}"]
-            print(f"🔄 Planner: Using fallback plan due to exception: {fallback_plan}")
-            return {"plan": fallback_plan}  
-          
+            print(f"🔄 Enhanced Planner: Using fallback plan due to exception: {fallback_plan}")
+            return {"plan": fallback_plan}
+    
     def replan_step(state: PlanExecuteState):
-        """Replan based on the results so far."""
+        """Replan based on the results so far with enhanced decision making."""
+        print(f"🔄 REPLAN_STEP DEBUG:")
+        print(f"  - Current plan: {state.get('plan', [])}")
+        print(f"  - Past steps count: {len(state.get('past_steps', []))}")
+        
         # Use sync invoke to avoid async issues with LiteLLM
-        output = replanner.invoke(state)
-        if output.action_type == "response":
-            return {"response": output.response}
-        else:
-            return {"plan": output.steps}
+        try:
+            output = replanner.invoke(state)
+            print(f"🔄 REPLAN_STEP: Replanner output type: {type(output)}")
+            print(f"🔄 REPLAN_STEP: Action type: {getattr(output, 'action_type', 'MISSING')}")
+            
+            if output.action_type == "response":
+                print(f"🎯 REPLAN_STEP: Providing final response")
+                return {"response": output.response}
+            else:
+                print(f"🔄 REPLAN_STEP: Continuing with new plan: {getattr(output, 'steps', 'MISSING')}")
+                return {"plan": output.steps}
+        except Exception as e:
+            print(f"❌ REPLAN_STEP: Exception: {str(e)}")
+            return {"response": f"Error during replanning: {str(e)}"}
     
     def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
-        """Determine if agent should continue with replan or end."""
-        # Check if we have a plan and past steps
+        """Enhanced logic for determining workflow continuation."""
         plan = state.get("plan", [])
         past_steps = state.get("past_steps", [])
         
-        if not plan or not past_steps:
-            return "replan"
+        print(f"🎯 SHOULD_CONTINUE DEBUG:")
+        print(f"  - Plan length: {len(plan)}")
+        print(f"  - Past steps length: {len(past_steps)}")
+        print(f"  - Plan steps: {plan}")
         
-        # Key insight: Only complete if ALL plan steps are done OR if the user's specific question is answered
-        original_query = state.get("input", "").lower()
-        recent_step = past_steps[-1][1] if past_steps else ""
+        if not plan or not past_steps:
+            print(f"🎯 SHOULD_CONTINUE: Missing plan or past_steps → replan")
+            return "replan"
         
         # Check if all plan steps are completed
         if len(past_steps) >= len(plan):
+            print(f"🎯 SHOULD_CONTINUE: All steps completed ({len(past_steps)}/{len(plan)}) → complete")
             return "complete"
         
-        # General completion logic: check if the response seems to directly answer the question
-        # Look for indicators that this is a complete response rather than intermediate results
-        
-        # If the response is asking the user for input, it's not complete
-        if any(phrase in recent_step.lower() for phrase in ["would you like", "do you want", "shall i", "should i"]):
-            return "replan"
-        
-        # If the response seems to be providing a direct answer to the question
-        answer_indicators = ["the answer is", "based on", "according to", "results show", "found that"]
-        if any(indicator in recent_step.lower() for indicator in answer_indicators):
-            return "complete"
-        
-        # If the response is quite substantial and contains specific information
-        if len(recent_step) > 200 and len(past_steps) > 0:
-            # Check if this seems like a final answer rather than a search summary
-            if not any(phrase in recent_step.lower() for phrase in ["now we can", "next step", "proceed to"]):
-                return "complete"
-        
-        # Default: continue with replan
+        # NOT all steps completed - should continue
+        print(f"🎯 SHOULD_CONTINUE: {len(past_steps)}/{len(plan)} steps completed → replan to continue")
         return "replan"
     
     def complete_step(state: PlanExecuteState):
-        """Complete the workflow by setting the response from the last step."""
+        """Complete the workflow with enhanced response formatting."""
         if state.get("past_steps"):
             recent_step = state["past_steps"][-1][1]
             original_query = state.get("input", "")
             
-            # Format response based on query type
-            formatted_response = format_final_response(recent_step, original_query)
+            # Enhanced response formatting
+            formatted_response = format_enhanced_response(recent_step, original_query, state.get("past_steps", []))
             return {"response": formatted_response}
-        return {"response": "Task completed."}
+        return {"response": "Research completed successfully."}
     
-    def format_final_response(response: str, original_query: str) -> str:
-        """Format the final response for better user experience."""
-        # General formatting improvements without query-specific logic
-        
+    def format_enhanced_response(response: str, original_query: str, all_steps: List) -> str:
+        """Enhanced response formatting with better structure and context."""
         # Clean up the response
         response = response.strip()
         
         # If response is very short, assume it's a direct answer
-        if len(response) < 50:
+        if len(response) < 100:
             return f"**Answer:** {response}"
         
-        # If response contains structured information, preserve it
-        if any(indicator in response for indicator in ['**', '###', '- ', '1.', '2.']):
+        # If response already has good structure, preserve it
+        if any(indicator in response for indicator in ['##', '**', '###', '- ', '1.', '2.']):
             return response
         
-        # For longer responses, add a subtle header
-        return f"**Result:**\n\n{response}"
-    
+        # For comprehensive responses, add context about completeness
+        if len(all_steps) > 1:
+            context_note = f"\n\n*Based on analysis of {len(all_steps)} research steps using the Swedish publications database.*"
+            return f"**Research Results:**\n\n{response}{context_note}"
+        
+        # Default formatting for single-step comprehensive responses
+        return f"**Research Analysis:**\n\n{response}"
     
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
         """Determine if we should end or continue after replan."""
@@ -328,7 +306,7 @@ Use the available research publication tools to complete this step. Provide clea
         else:
             return "agent"
     
-    # Create the state graph exactly like DEMO
+    # Create the state graph
     workflow = StateGraph(PlanExecuteState)
     
     # Add nodes
@@ -337,11 +315,11 @@ Use the available research publication tools to complete this step. Provide clea
     workflow.add_node("replan", replan_step)
     workflow.add_node("complete", complete_step)
     
-    # Add edges following DEMO pattern with proper conditional routing
+    # Add edges with enhanced routing
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "agent")
     
-    # Add conditional edge from agent - let agent decide next action
+    # Add conditional edge from agent
     workflow.add_conditional_edges(
         "agent",
         should_continue_or_end,
@@ -361,27 +339,17 @@ Use the available research publication tools to complete this step. Provide clea
     return workflow
 
 
+# Update other functions to use the enhanced workflow
 def compile_research_agent(
     es_client=None,
     index_name: str = "research-publications-static",
     recursion_limit: int = 50
 ) -> Any:
     """
-    Compile the research agent workflow into a runnable.
-    
-    Args:
-        es_client: Elasticsearch client instance
-        index_name: Name of the publications index
-        recursion_limit: Maximum number of steps to execute
-        
-    Returns:
-        Compiled LangGraph agent
+    Compile the enhanced research agent workflow into a runnable.
     """
     workflow = create_research_workflow(es_client, index_name)
-    
-    # Compile the workflow
     app = workflow.compile()
-    
     return app
 
 
@@ -390,27 +358,19 @@ def run_research_query(
     es_client=None,
     index_name: str = "research-publications-static",
     recursion_limit: int = 50,
-    stream: bool = False
+    stream: bool = False,
+    conversation_history: Optional[List[Dict]] = None
 ) -> Dict[str, Any]:
     """
-    Run a research query through the complete workflow.
-    
-    Args:
-        query: Natural language query about research publications
-        es_client: Elasticsearch client instance
-        index_name: Name of the publications index
-        recursion_limit: Maximum number of steps to execute
-        stream: Whether to stream intermediate results
-        
-    Returns:
-        Final result from the workflow
+    Run a research query through the enhanced workflow.
     """
     # Compile the agent
     app = compile_research_agent(es_client, index_name, recursion_limit)
     
-    # Create initial state following DEMO patterns
+    # Create initial state with conversation history
     initial_state = {
         "input": query,
+        "conversation_history": conversation_history,  # Include context
         "plan": [],
         "past_steps": [],
         "response": None,
@@ -436,16 +396,14 @@ def run_research_query(
         
         return final_state
     else:
-        # Run synchronously - avoid async issues with LiteLLM
+        # Run synchronously
         result = app.invoke(initial_state, config=config)
         return result
 
 
 class ResearchAgent:
     """
-    Main research agent class that wraps the LangGraph workflow.
-    
-    Following the exact pattern from DEMO_plan-and-execute.ipynb
+    Enhanced research agent class with dynamic tool descriptions.
     """
     
     def __init__(
@@ -454,14 +412,7 @@ class ResearchAgent:
         index_name: str = "research-publications-static",
         recursion_limit: int = 50
     ):
-        """
-        Initialize the research agent.
-        
-        Args:
-            es_client: Elasticsearch client instance
-            index_name: Name of the publications index
-            recursion_limit: Maximum number of steps to execute
-        """
+        """Initialize the enhanced research agent."""
         self.es_client = es_client
         self.index_name = index_name
         self.recursion_limit = recursion_limit
@@ -471,46 +422,20 @@ class ResearchAgent:
         self._compile_agent()
     
     def _compile_agent(self):
-        """Compile the LangGraph workflow."""
+        """Compile the enhanced LangGraph workflow."""
         self.app = compile_research_agent(
             self.es_client,
             self.index_name,
             self.recursion_limit
         )
     
-    async def query(self, query: str, stream: bool = False) -> Dict[str, Any]:
-        """
-        Execute a research query.
-        
-        Args:
-            query: Natural language query about research publications
-            stream: Whether to stream intermediate results
-            
-        Returns:
-            Final result from the workflow
-        """
-        return await run_research_query(
-            query,
-            self.es_client,
-            self.index_name,
-            self.recursion_limit,
-            stream
-        )
-    
     async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Any:
         """
-        Stream a research query execution with conversation context.
-        
-        Args:
-            query: Natural language query about research publications
-            conversation_history: Previous conversation messages for context
-            
-        Yields:
-            Intermediate results from the workflow
+        Stream a research query execution with enhanced context handling.
         """
         initial_state = {
             "input": query,
-            "conversation_history": conversation_history,  # NEW: Pass conversation context
+            "conversation_history": conversation_history,
             "plan": [],
             "past_steps": [],
             "response": None,
@@ -524,38 +449,3 @@ class ResearchAgent:
         
         async for event in self.app.astream(initial_state, config=config):
             yield event
-    
-    def get_graph_visualization(self) -> bytes:
-        """
-        Get a visualization of the workflow graph.
-        
-        Returns:
-            PNG bytes of the graph visualization
-        """
-        return self.app.get_graph(xray=True).draw_mermaid_png()
-
-
-if __name__ == "__main__":
-    # Example usage matching DEMO patterns
-    import asyncio
-    
-    async def test_workflow():
-        """Test the research agent workflow."""
-        # Create a research agent
-        agent = ResearchAgent()
-        
-        # Test query
-        query = "How many papers has Christian Fager published?"
-        
-        print(f"Query: {query}")
-        print("=" * 50)
-        
-        # This would work with proper ES client and OpenAI API key
-        # result = await agent.query(query, stream=True)
-        # print(f"Final result: {result}")
-        
-        print("Research agent workflow created successfully!")
-        print("Add ES client and OpenAI API key to test with real data.")
-    
-    # Uncomment to test
-    # asyncio.run(test_workflow())

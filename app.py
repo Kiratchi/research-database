@@ -23,16 +23,52 @@ import traceback
 
 
 def handle_simple_query(query: str) -> Optional[str]:
-    """Handle basic greetings and help requests."""
-    query_lower = query.lower().strip()
+    """Handle basic greetings and help requests with enhanced pattern matching."""
+    # Clean the query: strip whitespace and convert to lowercase
+    query_clean = query.lower().strip()
     
-    if query_lower in ['hello', 'hi', 'hey', 'good morning', 'good afternoon']:
+    # Remove punctuation for better matching
+    query_no_punct = query_clean.rstrip('!?.,;:')
+    
+    # Greeting patterns
+    greeting_patterns = [
+        'hello', 'hi', 'hey', 'good morning', 'good afternoon', 
+        'good evening', 'howdy', 'greetings', 'hiya', 'sup'
+    ]
+    
+    # Thank you patterns
+    thanks_patterns = [
+        'thanks', 'thank you', 'thank you very much', 'thank you so much',
+        'thankyou', 'thx', 'ty', 'much appreciated', 'appreciate it'
+    ]
+    
+    # Goodbye patterns
+    goodbye_patterns = [
+        'bye', 'goodbye', 'see you', 'see ya', 'farewell', 'take care',
+        'that\'s all', 'that is all', 'i\'m done', 'im done', 'all done'
+    ]
+    
+    # Help patterns
+    help_patterns = [
+        'what can you do', 'help me', 'how do you work', 'what do you do',
+        'how can you help', 'what are your capabilities', 'help',
+        'what can i ask', 'how does this work', 'instructions'
+    ]
+    
+    # Check for greetings
+    if query_no_punct in greeting_patterns:
         return "Hello! I'm here to help you search and analyze research publications. What would you like to know?"
     
-    if query_lower in ['thanks', 'thank you', 'bye', 'goodbye', 'that\'s all']:
+    # Check for thanks
+    if query_no_punct in thanks_patterns:
         return "You're welcome! Feel free to ask if you need help with any research publications."
     
-    if any(phrase in query_lower for phrase in ['what can you do', 'help me', 'how do you work']):
+    # Check for goodbyes
+    if query_no_punct in goodbye_patterns:
+        return "You're welcome! Feel free to ask if you need help with any research publications."
+    
+    # Check for help requests (using 'in' for partial matching)
+    if any(pattern in query_clean for pattern in help_patterns):
         return ("I can help you search and analyze research publications. I can:\n"
                "• Find papers by author, title, or topic\n"
                "• Count publications and analyze trends\n"

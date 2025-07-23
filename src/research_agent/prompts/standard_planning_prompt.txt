@@ -1,0 +1,21 @@
+**Research Query:** "{query}"
+
+**Planning Instructions:**
+Create a comprehensive step-by-step plan to fully answer this research query about Swedish academic publications.
+
+**Query Analysis:**
+- If query asks for specific number of results (e.g., "20 most recent", "top 15", "all publications"): Plan to use max_results parameter and pagination if needed
+- If query mentions "recent" or "latest": Use search_by_author with year-based sorting
+- If query asks for complete lists: Plan multiple paginated calls if result count likely >10
+
+**Planning Considerations:**
+- What specific information does the user need?
+- Which tools are most appropriate for each information requirement?
+- What is the optimal sequence for gathering this information?
+- Are there likely to be large result sets requiring pagination?
+- What context or supporting information would enhance the answer?
+
+**Pagination Strategy:**
+- For requests of 11-50 results: Use single call with appropriate max_results
+- For requests >50 results: Plan multiple calls with offset (e.g., offset=0, then offset=50)
+- Always check pagination info in results to determine if more calls needed

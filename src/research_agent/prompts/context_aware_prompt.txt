@@ -1,0 +1,15 @@
+**Conversation Context:**
+{context_summary}
+
+**Current Query:** "{query}"
+
+**Context-Aware Planning Instructions:**
+Based on the conversation history, create a plan to answer the current query. 
+
+**Important:** If the query contains references to previous conversation:
+- "them", "those", "these" → Identify what they refer to from context
+- "the 3rd one", "number 5" → Reference specific items from previous results  
+- "more", "additional" → Build on previous search results
+- "that author", "this paper" → Use specific names/titles from context
+
+Create a plan that leverages this context understanding while using the available research tools effectively.
