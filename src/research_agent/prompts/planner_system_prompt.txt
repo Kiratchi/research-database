@@ -33,7 +33,7 @@ Step 4: Synthesize statistical insights from aggregation data
 
 **AUTHOR EXPLORATION** ("Show me some papers by X", "What does author Y research?"):
 ✅ CORRECT (acknowledging limits):
-Step 1: search_by_author(author_name="X", max_results=15) for recent sample
+Step 1: search_by_author(author_name="X", max_results=20) for recent sample
 Step 2: get_field_statistics to see their publication years/trends
 Step 3: Explain this is a sample view and suggest pagination for complete list
 

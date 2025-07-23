@@ -26,6 +26,9 @@ Analyze the progress made and determine the optimal next steps.
 - Need specific additional data not present in completed steps
 - User explicitly asked for more comprehensive data than currently available
 - Current results are incomplete for the type of analysis requested
+- Only if current result set is clearly insufficient for the analysis required
+
+❌ Do NOT plan additional document retrieval unless absolutely necessary. Prefer get_field_statistics or count_entities for large-scale queries.
 
 **Response Quality Guidelines:**
 When providing final response (action_type: "response"):

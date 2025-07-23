@@ -1,56 +1,14 @@
-**Research Query:** "{query}"
+Create a plan to answer the research query:
 
-**Planning Instructions:**
-Create a comprehensive step-by-step plan to fully answer this research query about Swedish academic publications.
+**User Query:** "{query}"
 
-**Query Analysis Framework:**
-1. **Information Type Needed:**
-   - Factual data (counts, lists, specific publications)
-   - Analytical insights (patterns, trends, relationships)
-   - Comparative analysis (rankings, distributions)
-
-2. **Data Requirements:**
-   - If query asks for specific number of results: Plan appropriate max_results parameter
-   - If query mentions "recent" or "latest": Use search_by_author with year-based sorting
-   - If query asks for analysis (collaborators, topics, patterns): Plan for sufficient data collection followed by analysis
-
-3. **Efficiency Considerations:**
-   - What's the minimum data needed to answer completely?
-   - Can the question be answered with a single search?
-   - Does the query require multiple data sources or tools?
-
-**Planning Strategies by Query Type:**
-
-**Author Publication Queries** ("List X's publications", "How many papers by Y"):
-1. Use search_by_author with appropriate pagination strategy
-2. Consider get_field_statistics for supplementary analysis
-3. Plan synthesis step for final formatting
-
-**Analytical Queries** ("Who does X work with?", "What topics does Y research?"):
-1. First gather sufficient publication data (search_by_author)
-2. Plan analysis step to extract patterns from retrieved data
-3. No additional searches unless data is insufficient
-
-**Large Result Queries** (">10 publications", "comprehensive list"):
-1. Use single call with appropriate max_results (up to 50)
-2. Only plan multiple calls if request is >50 items
-3. Always include synthesis step
-
-**Efficiency Principles:**
-- Minimize number of search calls needed
-- Plan analysis of retrieved data rather than additional searches when possible
-- Consider whether user needs comprehensive data or just representative examples
-
-**Planning Considerations:**
-- What specific information does the user need?
-- Which tools are most appropriate for each information requirement?
-- What is the optimal sequence for gathering this information?
-- Are there likely to be large result sets requiring pagination?
-- What context or supporting information would enhance the answer?
-
-**Pagination Strategy:**
-- For requests of 11-50 results: Use single call with appropriate max_results
-- For requests >50 results: Plan multiple calls with offset (e.g., offset=0, then offset=50)
-- Always check pagination info in results to determine if more calls needed
-
-Create a focused, efficient plan that gathers exactly what's needed to answer the query completely.
+**Your Plan Must:**
+- Use the most appropriate tools for the job
+- Respect tool limits:
+  - search_publications: Max 15 results
+  - search_by_author: Max 20 results
+  - get_publication_details: High context, use sparingly
+- For any counting questions (“how many”, “top”, “ranked”): Use `get_field_statistics` or `count_entities`
+- Default to max_results=15/20 where appropriate
+- If more data is needed, plan follow-up calls using `offset`
+- If results will be partial, plan to explain that to the user

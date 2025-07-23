@@ -4,15 +4,20 @@
 **Current Query:** "{query}"
 
 **Context-Aware Planning Instructions:**
-Based on the conversation history, create a plan to answer the current query.
+Use the available research tools to answer this query, taking conversation history into account.
 
-**Reference Resolution:**
-- "them", "those", "these" → Identify what they refer to from context
-- "the 3rd one", "number 5" → Reference specific items from previous results  
-- "more", "additional" → Build on previous search results
-- "that author", "this paper" → Use specific names/titles from context
+🧠 Reference Resolution:
+- "them", "those", "these" → Identify what they refer to in past messages
+- "the 3rd one", "number 5" → Reference specific indexed items from prior results  
+- "more", "additional", "all" → Consider whether previous tools returned full results or partial due to limits
 
-**Planning Strategy:**
-Create a plan using the available research tools to answer the query. When user references previous results, plan to retrieve the necessary data using appropriate tools to provide a complete answer.
+📌 Planning Reminders:
+- If user asks for “more”, use the **offset** parameter to paginate
+- If user asks for “all” or refers to many results (>20), switch to:
+  - `get_field_statistics` for distributions
+  - `count_entities` for counts
 
-Create a plan that leverages this context understanding while using the available research tools effectively.
+✅ Always use:
+- `search_by_author(max_results=20)` or `search_publications(max_results=15)` when querying again
+- Honest messaging when results are partial
+- Aggregation tools for statistical or large-scale follow-ups
