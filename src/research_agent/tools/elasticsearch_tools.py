@@ -1,8 +1,9 @@
 """
-Enhanced Elasticsearch tools with self-contained descriptions for research publications.
+Fixed Elasticsearch tools using StructuredTool for proper multi-parameter support.
 
-Each tool now contains detailed, specific descriptions that are automatically
-injected into planner and replanner prompts for better tool selection.
+The issue was using basic Tool class instead of StructuredTool, which caused
+"Too many arguments to single-input tool" errors when LLM tried to pass
+multiple parameters like max_results and offset for pagination.
 """
 
 from typing import Dict, List, Any, Optional
@@ -12,10 +13,8 @@ import json
 from pydantic import BaseModel, Field
 from elasticsearch import Elasticsearch
 
-
-# LangChain imports with error handling  
-from langchain.tools import Tool
-from langchain_core.tools import BaseTool
+# LangChain imports - FIXED: Use StructuredTool instead of Tool
+from langchain_core.tools import StructuredTool, BaseTool
 
 
 _es_client = None
@@ -29,7 +28,7 @@ def initialize_elasticsearch_tools(es_client: Elasticsearch, index_name: str = "
     _index_name = index_name
 
 
-# Enhanced Pydantic schemas with better descriptions
+# Keep your existing Pydantic schemas - they're perfect
 class SearchPublicationsInput(BaseModel):
     """Input schema for comprehensive publication search."""
     query: str = Field(
@@ -86,13 +85,15 @@ class GetPublicationDetailsInput(BaseModel):
     )
 
 
-# Core search functions
+# Keep your existing search functions - they're working correctly
 def search_publications(query: str, max_results: int = 10, offset: int = 0, fields: Optional[List[str]] = None) -> str:
     """Search publications using full-text search with automatic relevance ranking."""
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
+        print(f"🔍 SEARCH_PUBLICATIONS: query='{query}', max_results={max_results}, offset={offset}, fields={fields}")
+        
         search_body = {
             "query": {
                 "multi_match": {
@@ -136,6 +137,8 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         if isinstance(total_hits, dict):
             total_hits = total_hits.get('value', total_hits.get('count', 0))
         
+        print(f"✅ SEARCH_PUBLICATIONS: Found {total_hits} total hits, returned {len(results)} results")
+        
         return json.dumps({
             "total_hits": total_hits,
             "results": results,
@@ -149,6 +152,7 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         })
         
     except Exception as e:
+        print(f"❌ SEARCH_PUBLICATIONS: Error: {str(e)}")
         return json.dumps({"error": f"Search failed: {str(e)}"})
 
 
@@ -158,6 +162,8 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
+        print(f"🔍 SEARCH_BY_AUTHOR: author_name='{author_name}', strategy='{strategy}', max_results={max_results}, offset={offset}")
+        
         # Build query based on strategy
         if strategy == "exact":
             query = {"match_phrase": {"Persons.PersonData.DisplayName": author_name}}
@@ -177,6 +183,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
             response = _es_client.search(index=_index_name, body=search_body)
         except Exception:
             # Fallback without sorting if field mapping issues
+            print("⚠️ SEARCH_BY_AUTHOR: Year sorting failed, trying without sort")
             search_body = {"query": query, "size": max_results, "from": offset}
             response = _es_client.search(index=_index_name, body=search_body)
         
@@ -208,6 +215,8 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         if isinstance(total_hits, dict):
             total_hits = total_hits.get('value', total_hits.get('count', 0))
         
+        print(f"✅ SEARCH_BY_AUTHOR: Found {total_hits} total hits, returned {len(results)} results (offset: {offset})")
+        
         return json.dumps({
             "total_hits": total_hits,
             "results": results,
@@ -222,6 +231,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         })
         
     except Exception as e:
+        print(f"❌ SEARCH_BY_AUTHOR: Error: {str(e)}")
         return json.dumps({"error": f"Author search failed: {str(e)}"})
 
 
@@ -231,6 +241,8 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
+        print(f"🔍 GET_FIELD_STATISTICS: field='{field}', size={size}")
+        
         search_body = {
             "size": 0,
             "aggs": {
@@ -247,6 +259,8 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         buckets = response['aggregations']['field_stats']['buckets']
         stats = [{"value": bucket['key'], "count": bucket['doc_count']} for bucket in buckets]
         
+        print(f"✅ GET_FIELD_STATISTICS: Found {len(stats)} values for field '{field}'")
+        
         return json.dumps({
             "field": field,
             "total_documents": response['hits']['total'],
@@ -254,6 +268,7 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         })
         
     except Exception as e:
+        print(f"❌ GET_FIELD_STATISTICS: Error: {str(e)}")
         return json.dumps({"error": f"Statistics failed: {str(e)}"})
 
 
@@ -263,6 +278,8 @@ def get_publication_details(publication_id: str) -> str:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
+        print(f"🔍 GET_PUBLICATION_DETAILS: publication_id='{publication_id}'")
+        
         response = _es_client.get(index=_index_name, id=publication_id)
         source = response['_source']
         
@@ -288,9 +305,12 @@ def get_publication_details(publication_id: str) -> str:
             "url": source.get('DetailsUrlEng', 'No URL')
         }
         
+        print(f"✅ GET_PUBLICATION_DETAILS: Retrieved details for '{details['title'][:50]}...'")
+        
         return json.dumps(details)
         
     except Exception as e:
+        print(f"❌ GET_PUBLICATION_DETAILS: Error: {str(e)}")
         return json.dumps({"error": f"Failed to get publication details: {str(e)}"})
 
 
@@ -300,6 +320,8 @@ def get_statistics_summary() -> Dict[str, Any]:
         return {"error": "Elasticsearch client not initialized"}
     
     try:
+        print(f"🔍 GET_STATISTICS_SUMMARY: Starting database overview")
+        
         # Get total count
         count_response = _es_client.count(index=_index_name)
         total_publications = count_response['count']
@@ -346,7 +368,7 @@ def get_statistics_summary() -> Dict[str, Any]:
         years = [{"value": b['key'], "count": b['doc_count']} for b in years_response['aggregations']['years']['buckets']]
         types = [{"value": b['key'], "count": b['doc_count']} for b in types_response['aggregations']['types']['buckets']]
         
-        return {
+        result = {
             "total_publications": total_publications,
             "latest_year": years[0]['value'] if years else None,
             "most_common_type": types[0]['value'] if types else None,
@@ -355,11 +377,16 @@ def get_statistics_summary() -> Dict[str, Any]:
             "publication_types": types
         }
         
+        print(f"✅ GET_STATISTICS_SUMMARY: Database has {total_publications} publications, {result['total_authors']} authors")
+        
+        return result
+        
     except Exception as e:
+        print(f"❌ GET_STATISTICS_SUMMARY: Error: {str(e)}")
         return {"error": f"Failed to get statistics: {str(e)}"}
 
 
-# Tool registry with enhanced descriptions
+# FIXED: Updated tool registry to use StructuredTool
 TOOL_REGISTRY = [
     {
         "name": "search_publications",
@@ -582,7 +609,7 @@ USAGE EXAMPLES:
     {
         "name": "get_database_summary",
         "function": lambda: json.dumps(get_statistics_summary()),
-        "args_schema": None,
+        "args_schema": None,  # No parameters
         "short_description": "Get comprehensive database overview and key statistics",
         "detailed_description": """Generate high-level overview of the research publications database.
 
@@ -711,20 +738,30 @@ def get_tool_descriptions_for_execution() -> str:
 
 
 def create_elasticsearch_tools() -> List[BaseTool]:
-    """Create LangChain tools from the tool registry."""
+    """Create LangChain tools from the tool registry using StructuredTool."""
     tools = []
     
     for tool_info in TOOL_REGISTRY:
-        # Use the full detailed description instead of truncating
-        description = f"{tool_info['short_description']}.\n\n{tool_info['detailed_description']}"
+        print(f"🔧 CREATING TOOL: {tool_info['name']} with schema: {tool_info['args_schema']}")
         
-        tool = Tool(
-            name=tool_info["name"],
-            description=description,
-            func=tool_info["function"],
-            args_schema=tool_info["args_schema"]
-        )
+        # FIXED: Use StructuredTool instead of Tool for multi-parameter support
+        if tool_info["args_schema"] is not None:
+            tool = StructuredTool(
+                name=tool_info["name"],
+                description=tool_info["short_description"],
+                func=tool_info["function"],
+                args_schema=tool_info["args_schema"]
+            )
+        else:
+            # For tools without parameters (like get_database_summary)
+            tool = StructuredTool.from_function(
+                name=tool_info["name"],
+                description=tool_info["short_description"],
+                func=tool_info["function"]
+            )
+        
         tools.append(tool)
+        print(f"✅ CREATED TOOL: {tool_info['name']} successfully")
     
     return tools
 
@@ -736,6 +773,18 @@ def get_elasticsearch_tools() -> List[BaseTool]:
 
 
 def get_available_tools_summary() -> Dict[str, Any]:
+    """Get summary of all available tools for system status."""
+    return {
+        "total_tools": len(TOOL_REGISTRY),
+        "tools": [
+            {
+                "name": tool["name"],
+                "description": tool["short_description"],
+                "has_parameters": tool["args_schema"] is not None
+            }
+            for tool in TOOL_REGISTRY
+        ]
+    }
     """Get summary of all available tools for system status."""
     return {
         "total_tools": len(TOOL_REGISTRY),

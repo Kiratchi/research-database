@@ -1,7 +1,7 @@
 """
-Main LangGraph workflow for the research publications agent.
+Main LangGraph workflow for the research publications agent - FIXED VERSION
 
-Following LangChain's official plan-and-execute pattern from DEMO_plan-and-execute.ipynb
+Following LangChain's official plan-and-execute pattern with proper response flow
 """
 
 from typing import Dict, Any, Optional, Literal
@@ -40,7 +40,7 @@ def create_research_workflow(
     index_name: str = "research-publications-static"
 ) -> StateGraph:
     """
-    Create the main research agent workflow with dynamic tool descriptions.
+    Create the main research agent workflow with FIXED response handling.
     
     Args:
         es_client: Elasticsearch client instance
@@ -110,7 +110,7 @@ def create_research_workflow(
     replanner_prompt = ChatPromptTemplate.from_template(replanner_template)
     replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
     
-    # Define workflow steps with enhanced logic
+  
     def execute_step(state: PlanExecuteState):
         """Execute the current step using the research tools."""
         plan = state["plan"]
@@ -141,24 +141,76 @@ def create_research_workflow(
         )
         
         print(f"📝 EXECUTE_STEP: Sending formatted task to agent...")
+        print(f"📝 TASK CONTENT BEING SENT TO AGENT:")
+        print(f"{'='*60}")
+        print(task_formatted)
+        print(f"{'='*60}")
+        
+        # Debug available tools
+        print(f"🛠️ AVAILABLE TOOLS TO AGENT:")
+        for i, tool in enumerate(tools):
+            print(f"  {i+1}. {tool.name} - {tool.description[:100]}...")
         
         # Use sync invoke to avoid async issues with LiteLLM
         try:
+            print(f"🤖 CALLING AGENT EXECUTOR...")
+            
             agent_response = agent_executor.invoke(
                 {"messages": [("user", task_formatted)]}
             )
             
+            print(f"🤖 AGENT EXECUTOR RESPONSE DEBUG:")
+            print(f"  - Response type: {type(agent_response)}")
+            print(f"  - Response keys: {agent_response.keys() if isinstance(agent_response, dict) else 'Not a dict'}")
+            print(f"  - Number of messages: {len(agent_response.get('messages', []))}")
+            
+            # Debug all messages in the response
+            print(f"🗨️ ALL AGENT MESSAGES:")
+            for i, msg in enumerate(agent_response.get("messages", [])):
+                msg_content = msg.content if hasattr(msg, 'content') else str(msg)
+                print(f"  Message {i+1} ({type(msg).__name__}):")
+                print(f"    Content length: {len(msg_content)}")
+                print(f"    Preview: {msg_content[:150]}...")
+                
+                # Check if this message contains tool calls
+                if hasattr(msg, 'additional_kwargs'):
+                    print(f"    Additional kwargs: {msg.additional_kwargs}")
+                if hasattr(msg, 'tool_calls'):
+                    print(f"    Tool calls: {msg.tool_calls}")
+                print(f"    {'-'*40}")
+            
+            # Extract final response
             response_content = agent_response["messages"][-1].content
             print(f"✅ EXECUTE_STEP: Agent response length: {len(response_content)} characters")
             print(f"📄 EXECUTE_STEP: Agent response preview: {response_content[:200]}...")
             
+            # Look for tool usage mentions in the response
+            tool_mentions = []
+            for tool in tools:
+                if tool.name.lower() in response_content.lower():
+                    tool_mentions.append(tool.name)
+            
+            if tool_mentions:
+                print(f"🔍 TOOLS MENTIONED IN RESPONSE: {tool_mentions}")
+            else:
+                print(f"⚠️ NO TOOL NAMES FOUND IN RESPONSE")
+            
+            # Check for specific patterns that indicate tool confusion
+            if "search_publications" in response_content.lower() and "search_by_author" in task.lower():
+                print(f"🚨 TOOL CONFUSION DETECTED: Task mentions search_by_author but response mentions search_publications")
+            
             return {
                 "past_steps": [(task, response_content)],
             }
+            
         except Exception as e:
             print(f"❌ EXECUTE_STEP: Exception during agent execution: {str(e)}")
+            print(f"❌ EXECUTE_STEP: Exception type: {type(e)}")
+            import traceback
+            print(f"❌ EXECUTE_STEP: Full traceback:")
+            traceback.print_exc()
             return {"past_steps": [(task, f"Error executing task: {str(e)}")]}
-            
+               
     def plan_step(state: PlanExecuteState):
         """Create the initial plan for the research query with conversation context."""
         try:
@@ -221,9 +273,9 @@ def create_research_workflow(
             fallback_plan = [f"Search for information about: {query}"]
             print(f"🔄 Enhanced Planner: Using fallback plan due to exception: {fallback_plan}")
             return {"plan": fallback_plan}
-    
+        
     def replan_step(state: PlanExecuteState):
-        """Replan based on the results so far with enhanced decision making."""
+        """FIXED: Replan based on the results so far with proper response handling."""
         print(f"🔄 REPLAN_STEP DEBUG:")
         print(f"  - Current plan: {state.get('plan', [])}")
         print(f"  - Past steps count: {len(state.get('past_steps', []))}")
@@ -235,24 +287,31 @@ def create_research_workflow(
             print(f"🔄 REPLAN_STEP: Action type: {getattr(output, 'action_type', 'MISSING')}")
             
             if output.action_type == "response":
-                print(f"🎯 REPLAN_STEP: Providing final response")
-                return {"response": output.response}
+                print(f"🎯 REPLAN_STEP: Providing final response - will go to complete node")
+                # FIXED: Don't set "response" here, use "final_response" to avoid triggering should_end
+                return {"final_response": output.response}
             else:
                 print(f"🔄 REPLAN_STEP: Continuing with new plan: {getattr(output, 'steps', 'MISSING')}")
                 return {"plan": output.steps}
         except Exception as e:
             print(f"❌ REPLAN_STEP: Exception: {str(e)}")
-            return {"response": f"Error during replanning: {str(e)}"}
+            return {"final_response": f"Error during replanning: {str(e)}"}    
     
     def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
-        """Enhanced logic for determining workflow continuation."""
+        """FIXED: Enhanced logic for determining workflow continuation."""
         plan = state.get("plan", [])
         past_steps = state.get("past_steps", [])
         
         print(f"🎯 SHOULD_CONTINUE DEBUG:")
         print(f"  - Plan length: {len(plan)}")
         print(f"  - Past steps length: {len(past_steps)}")
+        print(f"  - Has final_response: {'final_response' in state}")
         print(f"  - Plan steps: {plan}")
+        
+        # FIXED: Check for final_response from replan step
+        if state.get("final_response"):
+            print(f"🎯 SHOULD_CONTINUE: Found final_response → complete")
+            return "complete"
         
         if not plan or not past_steps:
             print(f"🎯 SHOULD_CONTINUE: Missing plan or past_steps → replan")
@@ -265,19 +324,29 @@ def create_research_workflow(
         
         # NOT all steps completed - should continue
         print(f"🎯 SHOULD_CONTINUE: {len(past_steps)}/{len(plan)} steps completed → replan to continue")
-        return "replan"
+        return "replan"    
     
     def complete_step(state: PlanExecuteState):
-        """Complete the workflow with enhanced response formatting."""
-        if state.get("past_steps"):
+        """FIXED: Complete the workflow with enhanced response formatting."""
+        print(f"🎯 COMPLETE_STEP: Starting completion")
+        
+        # FIXED: Check if we have a final_response from replan
+        if state.get("final_response"):
+            final_response = state["final_response"]
+            print(f"🎯 COMPLETE_STEP: Using final_response from replan: {final_response[:200]}...")
+        elif state.get("past_steps"):
+            # Fallback: use the last step result
             recent_step = state["past_steps"][-1][1]
             original_query = state.get("input", "")
-            
-            # Enhanced response formatting
-            formatted_response = format_enhanced_response(recent_step, original_query, state.get("past_steps", []))
-            return {"response": formatted_response}
-        return {"response": "Research completed successfully."}
-    
+            final_response = format_enhanced_response(recent_step, original_query, state.get("past_steps", []))
+            print(f"🎯 COMPLETE_STEP: Using enhanced response from past steps: {final_response[:200]}...")
+        else:
+            final_response = "Research completed successfully."
+            print(f"🎯 COMPLETE_STEP: Using default response")
+        
+        print(f"🎯 COMPLETE_STEP: Final response length: {len(final_response)} characters")
+        return {"response": final_response}
+
     def format_enhanced_response(response: str, original_query: str, all_steps: List) -> str:
         """Enhanced response formatting with better structure and context."""
         # Clean up the response
@@ -300,46 +369,50 @@ def create_research_workflow(
         return f"**Research Analysis:**\n\n{response}"
     
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
-        """Determine if we should end or continue after replan."""
+        """FIXED: Determine if we should end or continue after replan."""
+        print(f"🔄 SHOULD_END DEBUG:")
+        print(f"  - Has response: {'response' in state}")
+        print(f"  - Has final_response: {'final_response' in state}")
+        print(f"  - Has plan: {'plan' in state and bool(state.get('plan'))}")
+        
+        # FIXED: Only end if we have a proper response (from complete node)
         if "response" in state and state["response"]:
+            print(f"🎯 SHOULD_END: Has response → __end__")
             return "__end__"
         else:
+            print(f"🎯 SHOULD_END: No response → agent")
             return "agent"
     
     # Create the state graph
     workflow = StateGraph(PlanExecuteState)
-    
+
     # Add nodes
     workflow.add_node("planner", plan_step)
     workflow.add_node("agent", execute_step)
     workflow.add_node("replan", replan_step)
     workflow.add_node("complete", complete_step)
-    
-    # Add edges with enhanced routing
+
+    # FIXED: Proper edges to ensure complete node is always used
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "agent")
-    
-    # Add conditional edge from agent
+
+    # Agent routes through should_continue_or_end
     workflow.add_conditional_edges(
         "agent",
         should_continue_or_end,
         ["replan", "complete", END]
     )
-    
-    # Add edge from complete to END
+
+    # Complete always goes to END
     workflow.add_edge("complete", END)
-    
-    # Add conditional edge for ending after replan
-    workflow.add_conditional_edges(
-        "replan",
-        should_end,
-        ["agent", END]
-    )
-    
+
+    # FIXED: Replan always goes back to agent (removes race condition)
+    workflow.add_edge("replan", "agent")
+
     return workflow
 
 
-# Update other functions to use the enhanced workflow
+# Keep your existing functions unchanged
 def compile_research_agent(
     es_client=None,
     index_name: str = "research-publications-static",

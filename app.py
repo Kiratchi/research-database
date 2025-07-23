@@ -190,7 +190,7 @@ class FlaskResearchAgent:
             }
     
     async def stream_query_direct(self, query: str, conversation_history: Optional[List[Dict]] = None):
-        """Stream a query directly using ResearchAgent with enhanced debugging."""
+        """Stream a query directly using ResearchAgent with FIXED response capture."""
         print(f"🔍 Direct Agent: Starting stream query: {query}")
         print(f"🔍 Direct Agent: Conversation history length: {len(conversation_history) if conversation_history else 0}")
         
@@ -210,7 +210,7 @@ class FlaskResearchAgent:
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
                 return
-            
+
             if not self.is_ready():
                 self.query_stats["failed_queries"] += 1
                 yield json.dumps({
@@ -219,7 +219,7 @@ class FlaskResearchAgent:
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
                 return
-            
+
             # Initialize research agent and stream directly
             research_agent = ResearchAgent(
                 es_client=self.es_client,
@@ -240,12 +240,22 @@ class FlaskResearchAgent:
                 for node_name, node_data in event.items():
                     print(f"🔍 Direct Agent: Processing node '{node_name}' with data keys: {list(node_data.keys()) if isinstance(node_data, dict) else 'not a dict'}")
                     
+                    # FIXED: Handle None node_data
+                    if node_data is None:
+                        print(f"⚠️ Direct Agent: Node '{node_name}' returned None data, skipping")
+                        continue
+                    
+                    # Ensure node_data is a dictionary
+                    if not isinstance(node_data, dict):
+                        print(f"⚠️ Direct Agent: Node '{node_name}' data is not a dict: {type(node_data)}")
+                        continue
+                    
                     if node_name == "__end__":
                         print(f"🎯 Direct Agent: Found __end__ node!")
                         print(f"🎯 Direct Agent: End node data: {node_data}")
                         
                         final_response = node_data.get('response', 'No response in end node')
-                        print(f"🎯 Direct Agent: Final response: {final_response[:200]}...")
+                        print(f"🎯 Direct Agent: Final response from __end__: {final_response[:200]}...")
                         
                         self.query_stats["successful_queries"] += 1
                         yield json.dumps({
@@ -253,11 +263,60 @@ class FlaskResearchAgent:
                             'content': {
                                 'response': final_response,
                                 'workflow_type': 'research_workflow',
-                                'full_end_data': node_data  # Include all end data for debugging
+                                'source': '__end__ node'
                             },
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
                         
+                    elif node_name == "complete":
+                        print(f"🎯 Direct Agent: Found complete node!")
+                        print(f"🎯 Direct Agent: Complete node data: {node_data}")
+                        
+                        final_response = node_data.get('response', 'No response in complete node')
+                        print(f"🎯 Direct Agent: Final response from complete: {final_response[:200]}...")
+                        
+                        self.query_stats["successful_queries"] += 1
+                        yield json.dumps({
+                            'type': 'final',
+                            'content': {
+                                'response': final_response,
+                                'workflow_type': 'research_workflow',
+                                'source': 'complete node'
+                            },
+                            'timestamp': datetime.now().isoformat()
+                        }) + '\n'
+                        
+                    elif node_name == "replan":
+                        print(f"🔄 Direct Agent: Replan data: {node_data}")
+                        
+                        # FIXED: Check if replan contains a final response OR a final_response
+                        replan_response = node_data.get('response') or node_data.get('final_response')
+                        if replan_response:
+                            print(f"🎯 Direct Agent: Found final response in replan node!")
+                            print(f"🎯 Direct Agent: Replan response: {replan_response[:200]}...")
+                            
+                            final_response = replan_response
+                            self.query_stats["successful_queries"] += 1
+                            yield json.dumps({
+                                'type': 'final',
+                                'content': {
+                                    'response': final_response,
+                                    'workflow_type': 'research_workflow',
+                                    'source': 'replan node'
+                                },
+                                'timestamp': datetime.now().isoformat()
+                            }) + '\n'
+                        else:
+                            # Regular replan event
+                            yield json.dumps({
+                                'type': 'replan',
+                                'content': {
+                                    **node_data,
+                                    'message': 'Updating research plan...'
+                                },
+                                'timestamp': datetime.now().isoformat()
+                            }) + '\n'
+                            
                     elif node_name == "planner":
                         print(f"📋 Direct Agent: Planner data: {node_data}")
                         yield json.dumps({
@@ -287,35 +346,6 @@ class FlaskResearchAgent:
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
                         
-                    elif node_name == "replan":
-                        print(f"🔄 Direct Agent: Replan data: {node_data}")
-                        yield json.dumps({
-                            'type': 'replan',
-                            'content': {
-                                **node_data,
-                                'message': 'Updating research plan...'
-                            },
-                            'timestamp': datetime.now().isoformat()
-                        }) + '\n'
-                        
-                    elif node_name == "complete":
-                        # Handle the 'complete' node as the final response
-                        print(f"🎯 Direct Agent: Found complete node!")
-                        print(f"🎯 Direct Agent: Complete node data: {node_data}")
-                        
-                        final_response = node_data.get('response', 'No response in complete node')
-                        print(f"🎯 Direct Agent: Final response: {final_response[:200]}...")
-                        
-                        self.query_stats["successful_queries"] += 1
-                        yield json.dumps({
-                            'type': 'final',
-                            'content': {
-                                'response': final_response,
-                                'workflow_type': 'research_workflow'
-                            },
-                            'timestamp': datetime.now().isoformat()
-                        }) + '\n'
-                        
                     else:
                         print(f"📦 Direct Agent: Other node '{node_name}': {node_data}")
                         yield json.dumps({
@@ -326,17 +356,30 @@ class FlaskResearchAgent:
                         }) + '\n'
             
             print(f"✅ Direct Agent: Stream completed, sent {event_count} events")
+            print(f"📋 Direct Agent: Final response captured: {bool(final_response)}")
             
-            # If we didn't get a proper final response, send what we have
-            if final_response is None:
-                print("⚠️ Direct Agent: No final response captured, checking for alternative responses")
+            # FIXED: If we captured a final response but didn't send it yet, send it now
+            if final_response and final_response not in ["No response in end node", "No response in complete node"]:
+                print(f"🎯 Direct Agent: Sending captured final response")
+                yield json.dumps({
+                    'type': 'final',
+                    'content': {
+                        'response': final_response,
+                        'workflow_type': 'research_workflow',
+                        'source': 'captured response'
+                    },
+                    'timestamp': datetime.now().isoformat()
+                }) + '\n'
+            else:
+                # If we still don't have a proper final response
+                print("⚠️ Direct Agent: No final response captured, sending fallback")
                 self.query_stats["failed_queries"] += 1
                 yield json.dumps({
                     'type': 'final',
                     'content': {
                         'response': f"Research completed but no final response was generated. Processed {event_count} events.",
                         'workflow_type': 'research_workflow_incomplete',
-                        'debug_info': f"Processed {event_count} events but no __end__ node found"
+                        'debug_info': f"Processed {event_count} events but no response found"
                     },
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
@@ -350,7 +393,6 @@ class FlaskResearchAgent:
                 'content': f'Query processing error: {str(e)}',
                 'timestamp': datetime.now().isoformat()
             }) + '\n'
-
 
 # Initialize Flask app
 app = Flask(__name__)
