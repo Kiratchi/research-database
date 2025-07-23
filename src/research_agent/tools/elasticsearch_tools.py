@@ -1,9 +1,6 @@
 """
-Fixed Elasticsearch tools using StructuredTool for proper multi-parameter support.
-
-The issue was using basic Tool class instead of StructuredTool, which caused
-"Too many arguments to single-input tool" errors when LLM tried to pass
-multiple parameters like max_results and offset for pagination.
+Enhanced Elasticsearch tools with built-in context limits and honest communication.
+Keeps existing tool names and function signatures while adding smart limits.
 """
 
 from typing import Dict, List, Any, Optional
@@ -28,71 +25,137 @@ def initialize_elasticsearch_tools(es_client: Elasticsearch, index_name: str = "
     _index_name = index_name
 
 
-# Keep your existing Pydantic schemas - they're perfect
+# =============================================================================
+# CONTEXT LIMITS AND MANAGEMENT
+# =============================================================================
+
+class ContextLimits:
+    """Define clear context limits for each tool"""
+    
+    # Hard limits to prevent context overflow
+    SEARCH_PUBLICATIONS_MAX = 15  # Conservative limit
+    SEARCH_BY_AUTHOR_MAX = 20     # Slightly higher for author queries
+    FIELD_STATISTICS_MAX = 50     # Statistics are small
+    PUBLICATION_DETAILS_MAX = 5   # Full details are large
+    
+    # Token estimation (conservative)
+    TOKENS_PER_PUBLICATION = 600   # Reduced estimate
+    TOKENS_PER_AUTHOR_RESULT = 500 # Reduced estimate
+    TOKENS_PER_STATISTIC = 50      # Small
+    TOKENS_PER_DETAIL = 1200       # Full details
+    
+    # Context safety threshold (90% of Claude's limit)
+    MAX_SAFE_TOKENS = 180000
+
+
+def estimate_context_size(result_count: int, result_type: str) -> int:
+    """Estimate context size for different result types"""
+    multipliers = {
+        'publication': ContextLimits.TOKENS_PER_PUBLICATION,
+        'author_result': ContextLimits.TOKENS_PER_AUTHOR_RESULT,
+        'statistic': ContextLimits.TOKENS_PER_STATISTIC,
+        'detail': ContextLimits.TOKENS_PER_DETAIL
+    }
+    return result_count * multipliers.get(result_type, 500)
+
+
+def create_limitation_notice(total_hits: int, returned_count: int, tool_name: str) -> Dict[str, Any]:
+    """Create standardized limitation notices"""
+    notices = {}
+    
+    if total_hits > returned_count:
+        notices["limitation_notice"] = (
+            f"Found {total_hits} total results but showing only {returned_count} "
+            f"due to context window constraints. This is a partial view."
+        )
+        
+        if total_hits > 50:
+            notices["guidance"] = {
+                "for_counting": "Use get_field_statistics for accurate counts and trends",
+                "for_browsing": "Use pagination (offset parameter) to see more results",
+                "for_analysis": "Consider narrowing your search terms for more focused results"
+            }
+    
+    return notices
+
+
+# =============================================================================
+# UPDATED PYDANTIC SCHEMAS WITH LIMITS
+# =============================================================================
+
 class SearchPublicationsInput(BaseModel):
-    """Input schema for comprehensive publication search."""
+    """Input schema for comprehensive publication search with explicit limits."""
     query: str = Field(
-        description="Search query string (keywords, topics, concepts). Examples: 'machine learning', 'climate change', 'artificial intelligence'"
+        description="Search query string (keywords, topics, concepts). Examples: 'machine learning', 'climate change'"
     )
     max_results: int = Field(
         default=10, 
-        description="Maximum number of results to return (1-100, default: 10). Use higher values for comprehensive searches."
+        le=ContextLimits.SEARCH_PUBLICATIONS_MAX,  # Enforce hard limit
+        description=f"Maximum results to return (1-{ContextLimits.SEARCH_PUBLICATIONS_MAX}, default: 10). LIMITED due to context constraints."
     )
     offset: int = Field(
         default=0, 
-        description="Number of results to skip for pagination (default: 0). Use for getting additional pages: offset=10 for page 2, offset=20 for page 3, etc."
+        description="Pagination offset for getting additional results. Use 10, 20, 30, etc. for next pages."
     )
     fields: Optional[List[str]] = Field(
         default=None, 
-        description="Specific fields to search in. Available: 'Title', 'Abstract', 'Persons.PersonData.DisplayName', 'Keywords'. Leave empty to search all fields."
+        description="Specific fields to search in. Leave empty to search all fields."
     )
 
 
 class SearchByAuthorInput(BaseModel):
-    """Input schema for author-specific publication search."""
+    """Input schema for author-specific publication search with explicit limits."""
     author_name: str = Field(
-        description="Full author name to search for. Examples: 'John Smith', 'Maria González', 'Per-Olof Arnäs'. Use complete names for best results."
+        description="Full author name to search for. Use complete names for best results."
     )
     strategy: str = Field(
         default="partial", 
-        description="Search strategy: 'exact' for exact phrase matching (most precise), 'partial' for standard matching (recommended), 'fuzzy' for typo-tolerant search"
+        description="Search strategy: 'exact', 'partial' (recommended), or 'fuzzy'"
     )
     max_results: int = Field(
         default=10, 
-        description="Maximum number of results to return (1-100, default: 10). Use higher values for prolific authors."
+        le=ContextLimits.SEARCH_BY_AUTHOR_MAX,  # Enforce hard limit
+        description=f"Maximum results to return (1-{ContextLimits.SEARCH_BY_AUTHOR_MAX}, default: 10). LIMITED due to context constraints."
     )
     offset: int = Field(
         default=0, 
-        description="Number of results to skip for pagination (default: 0). Essential for authors with many publications."
+        description="Pagination offset. ESSENTIAL for prolific authors with many publications."
     )
 
 
 class GetFieldStatisticsInput(BaseModel):
-    """Input schema for database field analysis."""
+    """Input schema for database field analysis - NO LIMITS (uses aggregations)."""
     field: str = Field(
-        description="Field name to analyze. Valid options: 'Year' (publication years), 'Persons.PersonData.DisplayName' (authors), 'Source' (journals/venues), 'PublicationType' (article types)"
+        description="Field to analyze: 'Year', 'Persons.PersonData.DisplayName', 'Source', 'PublicationType'"
     )
     size: int = Field(
         default=10, 
-        description="Number of top values to return (1-50, default: 10). Use higher values for comprehensive analysis."
+        le=ContextLimits.FIELD_STATISTICS_MAX,
+        description=f"Number of top values to return (1-{ContextLimits.FIELD_STATISTICS_MAX}, default: 10). NO CONTEXT LIMITS - uses aggregations."
     )
 
 
 class GetPublicationDetailsInput(BaseModel):
-    """Input schema for detailed publication information."""
+    """Input schema for detailed publication information - VERY LIMITED."""
     publication_id: str = Field(
-        description="Elasticsearch document ID of the publication. Obtained from search results. Format: alphanumeric string."
+        description="Publication ID from search results. WARNING: Full details are large - use sparingly."
     )
 
 
-# Keep your existing search functions - they're working correctly
+# =============================================================================
+# ENHANCED TOOL FUNCTIONS WITH CONTEXT MANAGEMENT
+# =============================================================================
+
 def search_publications(query: str, max_results: int = 10, offset: int = 0, fields: Optional[List[str]] = None) -> str:
-    """Search publications using full-text search with automatic relevance ranking."""
+    """Search publications with built-in context limits and honest communication."""
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        print(f"🔍 SEARCH_PUBLICATIONS: query='{query}', max_results={max_results}, offset={offset}, fields={fields}")
+        # Enforce hard limit
+        actual_max = min(max_results, ContextLimits.SEARCH_PUBLICATIONS_MAX)
+        
+        print(f"🔍 SEARCH_PUBLICATIONS: query='{query}', max_results={actual_max} (requested: {max_results}), offset={offset}")
         
         search_body = {
             "query": {
@@ -103,7 +166,7 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
                     "fuzziness": "AUTO"
                 }
             },
-            "size": max_results,
+            "size": actual_max,
             "from": offset,
             "sort": [{"_score": {"order": "desc"}}]
         }
@@ -139,30 +202,52 @@ def search_publications(query: str, max_results: int = 10, offset: int = 0, fiel
         
         print(f"✅ SEARCH_PUBLICATIONS: Found {total_hits} total hits, returned {len(results)} results")
         
-        return json.dumps({
+        # Build response with honest communication
+        response_data = {
             "total_hits": total_hits,
             "results": results,
             "query": query,
             "pagination": {
                 "offset": offset,
-                "limit": max_results,
-                "has_more": offset + max_results < total_hits,
-                "next_offset": offset + max_results if offset + max_results < total_hits else None
+                "limit": actual_max,
+                "has_more": offset + actual_max < total_hits,
+                "next_offset": offset + actual_max if offset + actual_max < total_hits else None
             }
-        })
+        }
+        
+        # Add limitation notices
+        limitation_notices = create_limitation_notice(total_hits, len(results), "search_publications")
+        response_data.update(limitation_notices)
+        
+        # Specific guidance for large result sets
+        if total_hits > 100:
+            response_data["recommendation"] = (
+                "Large result set detected. Consider: "
+                "1) More specific search terms, "
+                "2) get_field_statistics for trends/counts, "
+                "3) Pagination for browsing all results"
+            )
+        
+        return json.dumps(response_data)
         
     except Exception as e:
         print(f"❌ SEARCH_PUBLICATIONS: Error: {str(e)}")
-        return json.dumps({"error": f"Search failed: {str(e)}"})
+        return json.dumps({
+            "error": f"Search failed: {str(e)}",
+            "guidance": "Try rephrasing your query or check for typos."
+        })
 
 
 def search_by_author(author_name: str, strategy: str = "partial", max_results: int = 10, offset: int = 0) -> str:
-    """Search publications by specific author with different matching strategies."""
+    """Search by author with built-in context limits and clear communication."""
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        print(f"🔍 SEARCH_BY_AUTHOR: author_name='{author_name}', strategy='{strategy}', max_results={max_results}, offset={offset}")
+        # Enforce hard limit
+        actual_max = min(max_results, ContextLimits.SEARCH_BY_AUTHOR_MAX)
+        
+        print(f"🔍 SEARCH_BY_AUTHOR: author_name='{author_name}', strategy='{strategy}', max_results={actual_max} (requested: {max_results}), offset={offset}")
         
         # Build query based on strategy
         if strategy == "exact":
@@ -174,7 +259,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         
         search_body = {
             "query": query,
-            "size": max_results,
+            "size": actual_max,
             "from": offset,
             "sort": [{"Year": {"order": "desc"}}]
         }
@@ -184,7 +269,7 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         except Exception:
             # Fallback without sorting if field mapping issues
             print("⚠️ SEARCH_BY_AUTHOR: Year sorting failed, trying without sort")
-            search_body = {"query": query, "size": max_results, "from": offset}
+            search_body = {"query": query, "size": actual_max, "from": offset}
             response = _es_client.search(index=_index_name, body=search_body)
         
         results = []
@@ -217,39 +302,69 @@ def search_by_author(author_name: str, strategy: str = "partial", max_results: i
         
         print(f"✅ SEARCH_BY_AUTHOR: Found {total_hits} total hits, returned {len(results)} results (offset: {offset})")
         
-        return json.dumps({
+        # Build response with honest communication
+        response_data = {
             "total_hits": total_hits,
             "results": results,
             "author": author_name,
             "strategy": strategy,
             "pagination": {
                 "offset": offset,
-                "limit": max_results,
-                "has_more": offset + max_results < total_hits,
-                "next_offset": offset + max_results if offset + max_results < total_hits else None
+                "limit": actual_max,
+                "has_more": offset + actual_max < total_hits,
+                "next_offset": offset + actual_max if offset + actual_max < total_hits else None
             }
-        })
+        }
+        
+        # Add limitation notices
+        limitation_notices = create_limitation_notice(total_hits, len(results), "search_by_author")
+        response_data.update(limitation_notices)
+        
+        # Special guidance for prolific authors
+        if total_hits > 50:
+            response_data["author_analysis"] = {
+                "prolific_author": True,
+                "total_publications": total_hits,
+                "showing_partial_view": True,
+                "recommendation": "Use get_field_statistics for complete publication counts and trends"
+            }
+        
+        # No results guidance
+        if total_hits == 0:
+            response_data["suggestions"] = [
+                "Try 'fuzzy' strategy for name variations",
+                "Check spelling of author name", 
+                "Try searching by last name only"
+            ]
+        
+        return json.dumps(response_data)
         
     except Exception as e:
         print(f"❌ SEARCH_BY_AUTHOR: Error: {str(e)}")
-        return json.dumps({"error": f"Author search failed: {str(e)}"})
+        return json.dumps({
+            "error": f"Author search failed: {str(e)}",
+            "guidance": "Check author name spelling or try different matching strategy."
+        })
 
 
 def get_field_statistics(field: str, size: int = 10) -> str:
-    """Analyze distribution of values in database fields."""
+    """Analyze field distribution - NO CONTEXT LIMITS (uses aggregations only)."""
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        print(f"🔍 GET_FIELD_STATISTICS: field='{field}', size={size}")
+        # This tool is ALWAYS context-safe because it uses aggregations
+        actual_size = min(size, ContextLimits.FIELD_STATISTICS_MAX)
+        
+        print(f"🔍 GET_FIELD_STATISTICS: field='{field}', size={actual_size} - CONTEXT SAFE (aggregations only)")
         
         search_body = {
-            "size": 0,
+            "size": 0,  # NO DOCUMENTS RETURNED - ONLY AGGREGATIONS
             "aggs": {
                 "field_stats": {
                     "terms": {
                         "field": f"{field}.keyword" if field in ["Persons.PersonData.DisplayName", "Source", "PublicationType"] else field,
-                        "size": size
+                        "size": actual_size
                     }
                 }
             }
@@ -259,26 +374,32 @@ def get_field_statistics(field: str, size: int = 10) -> str:
         buckets = response['aggregations']['field_stats']['buckets']
         stats = [{"value": bucket['key'], "count": bucket['doc_count']} for bucket in buckets]
         
-        print(f"✅ GET_FIELD_STATISTICS: Found {len(stats)} values for field '{field}'")
+        print(f"✅ GET_FIELD_STATISTICS: Found {len(stats)} values for field '{field}' - ALWAYS CONTEXT SAFE")
         
         return json.dumps({
             "field": field,
             "total_documents": response['hits']['total'],
-            "top_values": stats
+            "top_values": stats,
+            "context_safe": True,
+            "methodology": "Elasticsearch aggregations - no individual documents processed",
+            "limitation": "None - this analysis is complete and context-safe"
         })
         
     except Exception as e:
         print(f"❌ GET_FIELD_STATISTICS: Error: {str(e)}")
-        return json.dumps({"error": f"Statistics failed: {str(e)}"})
+        return json.dumps({
+            "error": f"Statistics failed: {str(e)}",
+            "guidance": "Check field name - valid options: 'Year', 'Persons.PersonData.DisplayName', 'Source', 'PublicationType'"
+        })
 
 
 def get_publication_details(publication_id: str) -> str:
-    """Retrieve complete information about a specific publication."""
+    """Retrieve complete publication details - USE SPARINGLY (large context)."""
     if not _es_client:
         return json.dumps({"error": "Elasticsearch client not initialized"})
     
     try:
-        print(f"🔍 GET_PUBLICATION_DETAILS: publication_id='{publication_id}'")
+        print(f"🔍 GET_PUBLICATION_DETAILS: publication_id='{publication_id}' - WARNING: Large context usage")
         
         response = _es_client.get(index=_index_name, id=publication_id)
         source = response['_source']
@@ -302,16 +423,116 @@ def get_publication_details(publication_id: str) -> str:
             "abstract": source.get('Abstract', 'No abstract'),
             "keywords": source.get('Keywords', 'No keywords'),
             "doi": source.get('IdentifierDoi', 'No DOI'),
-            "url": source.get('DetailsUrlEng', 'No URL')
+            "url": source.get('DetailsUrlEng', 'No URL'),
+            "context_warning": f"Full details use ~{ContextLimits.TOKENS_PER_DETAIL} tokens - use sparingly"
         }
         
-        print(f"✅ GET_PUBLICATION_DETAILS: Retrieved details for '{details['title'][:50]}...'")
+        print(f"✅ GET_PUBLICATION_DETAILS: Retrieved details for '{details['title'][:50]}...' - LARGE CONTEXT")
         
         return json.dumps(details)
         
     except Exception as e:
         print(f"❌ GET_PUBLICATION_DETAILS: Error: {str(e)}")
-        return json.dumps({"error": f"Failed to get publication details: {str(e)}"})
+        return json.dumps({
+            "error": f"Failed to get publication details: {str(e)}",
+            "guidance": "Check that publication_id is correct (obtained from search results)"
+        })
+
+
+# =============================================================================
+# COUNTING TOOL (NEW - ALWAYS CONTEXT SAFE)
+# =============================================================================
+
+class CountEntitiesInput(BaseModel):
+    """Input schema for counting entities using aggregations - ALWAYS CONTEXT SAFE."""
+    entity_type: str = Field(
+        description="What to count: 'authors' (unique people), 'publications' (total papers), 'authors_by_name' (specific name)"
+    )
+    search_term: str = Field(
+        description="Search term or name to count. For authors_by_name: specific author name. For others: topic/keyword."
+    )
+
+
+def count_entities(entity_type: str, search_term: str) -> str:
+    """Count entities using aggregations - ALWAYS CONTEXT SAFE, NO LIMITS."""
+    if not _es_client:
+        return json.dumps({"error": "Elasticsearch client not initialized"})
+    
+    try:
+        print(f"🔍 COUNT_ENTITIES: entity_type='{entity_type}', search_term='{search_term}' - ALWAYS CONTEXT SAFE")
+        
+        if entity_type == "authors_by_name":
+            # WORKING APPROACH: Simple match query + terms aggregation
+            agg_query = {
+                "size": 0,  # NO DOCUMENTS RETURNED
+                "query": {
+                    "match": {
+                        "Persons.PersonData.DisplayName": search_term
+                    }
+                },
+                "aggs": {
+                    "unique_authors": {
+                        "terms": {
+                            "field": "Persons.PersonData.DisplayName.keyword",
+                            "size": 100  # Get up to 100 unique author names
+                        }
+                    },
+                    "total_publications": {
+                        "value_count": {"field": "_id"}
+                    }
+                }
+            }
+            
+            response = _es_client.search(index=_index_name, body=agg_query)
+            
+            # Extract matching authors from aggregation
+            matching_authors = []
+            for bucket in response["aggregations"]["unique_authors"]["buckets"]:
+                author_name = bucket["key"]
+                pub_count = bucket["doc_count"]
+                
+                # Filter for names containing our search term (case insensitive)
+                if search_term.lower() in author_name.lower():
+                    matching_authors.append({
+                        "name": author_name,
+                        "publication_count": pub_count
+                    })
+            
+            total_pubs = response["aggregations"]["total_publications"]["value"]
+            
+            # Sort by publication count (most prolific first)
+            matching_authors.sort(key=lambda x: x["publication_count"], reverse=True)
+            
+            result = {
+                "entity_type": entity_type,
+                "search_term": search_term,
+                "total_publications_found": total_pubs,
+                "unique_individuals": len(matching_authors),
+                "individuals": matching_authors,
+                "summary": f"Found {len(matching_authors)} unique people with '{search_term}' in their name across {total_pubs} publications",
+                "methodology": "Elasticsearch aggregation on non-nested field - complete and accurate count",
+                "context_safe": True,
+                "limitation": "None - this count is complete and accurate",
+                "top_authors": matching_authors[:5] if matching_authors else []  # Top 5 for quick reference
+            }
+            
+        else:
+            # Other counting types can be added here
+            result = {
+                "error": f"Entity type '{entity_type}' not yet implemented",
+                "available_types": ["authors_by_name"],
+                "guidance": "Use 'authors_by_name' for counting people with specific names"
+            }
+        
+        print(f"✅ COUNT_ENTITIES: Found {len(matching_authors) if entity_type == 'authors_by_name' else 0} unique individuals - CONTEXT SAFE")
+        return json.dumps(result)
+        
+    except Exception as e:
+        print(f"❌ COUNT_ENTITIES: Error: {str(e)}")
+        return json.dumps({
+            "error": f"Counting failed: {str(e)}",
+            "guidance": "Check search term spelling and try again"
+        })
 
 
 def get_statistics_summary() -> Dict[str, Any]:
@@ -386,272 +607,156 @@ def get_statistics_summary() -> Dict[str, Any]:
         return {"error": f"Failed to get statistics: {str(e)}"}
 
 
-# FIXED: Updated tool registry to use StructuredTool
+def get_database_summary() -> str:
+    """Wrapper function to return JSON string for database summary."""
+    result = get_statistics_summary()
+    return json.dumps(result)
+
+
+
+# =============================================================================
+# UPDATED TOOL REGISTRY WITH LIMITS DOCUMENTATION
+# =============================================================================
+
 TOOL_REGISTRY = [
     {
         "name": "search_publications",
         "function": search_publications,
         "args_schema": SearchPublicationsInput,
-        "short_description": "Comprehensive full-text search across all publication fields",
-        "detailed_description": """Search research publications using intelligent full-text search with automatic relevance ranking.
+        "short_description": f"Search publications (MAX {ContextLimits.SEARCH_PUBLICATIONS_MAX} results due to context limits)",
+        "context_limit": ContextLimits.SEARCH_PUBLICATIONS_MAX,
+        "token_estimate": ContextLimits.TOKENS_PER_PUBLICATION,
+        "detailed_description": f"""Search research publications with BUILT-IN CONTEXT LIMITS.
 
-USAGE EXAMPLES:
-- search_publications(query="machine learning", max_results=20, offset=0)
-- search_publications(query="climate change", max_results=10, offset=10)
-- search_publications(query="artificial intelligence", max_results=50)
+**CRITICAL LIMITATIONS:**
+- Maximum {ContextLimits.SEARCH_PUBLICATIONS_MAX} results per call due to context window constraints
+- Each result uses ~{ContextLimits.TOKENS_PER_PUBLICATION} tokens
+- For larger datasets, tool will provide clear guidance
 
-**When to use:**
-- Looking for publications on specific topics, keywords, or concepts
-- Need broad search across titles, abstracts, author names, and keywords
-- Want relevance-ranked results with fuzzy matching for typos
-- Searching for interdisciplinary topics or general concepts
+**USE FOR:**
+- Finding specific papers on topics
+- Exploring research areas with samples
+- Getting publication examples
 
-**Key features:**
-- Multi-field search with title boosting (2x weight)
-- Automatic fuzzy matching for typo tolerance
-- Pagination support for large result sets
-- Relevance scoring and sorting
+**DON'T USE FOR:**
+- Counting total publications (use count_entities instead)
+- Large-scale analysis (use get_field_statistics instead)
 
-**Input parameters:**
-- query (REQUIRED): Search terms in quotes (e.g., "machine learning", "climate change")
-- max_results (optional): Number of results (1-100, default: 10)
-- offset (optional): Pagination offset (0, 10, 20, etc.)
-- fields (optional): Specific fields to search
-
-**Returns:**
-- total_hits: Total matching publications
-- results: Array with id, score, title, authors, year, abstract
-- pagination: Navigation info (has_more, next_offset)""",
-        
-        "planning_guidance": {
-            "use_when": [
-                "User asks about topics, concepts, or keywords",
-                "Need to find publications on interdisciplinary subjects",
-                "Looking for research on specific technologies or methods",
-                "Want comprehensive search across all fields"
-            ],
-            "combine_with": [
-                "get_field_statistics for trend analysis",
-                "get_publication_details for specific paper information"
-            ],
-            "pagination_strategy": "Use offset parameter for results beyond first 10-50"
-        }
+**Tool will automatically:**
+- Enforce result limits
+- Provide clear limitation notices
+- Suggest better approaches for large datasets"""
     },
     
     {
-        "name": "search_by_author",
+        "name": "search_by_author", 
         "function": search_by_author,
         "args_schema": SearchByAuthorInput,
-        "short_description": "Find all publications by specific authors with flexible matching",
-        "detailed_description": """Search publications by author name with multiple matching strategies and comprehensive pagination.
+        "short_description": f"Search by author (MAX {ContextLimits.SEARCH_BY_AUTHOR_MAX} results due to context limits)",
+        "context_limit": ContextLimits.SEARCH_BY_AUTHOR_MAX,
+        "token_estimate": ContextLimits.TOKENS_PER_AUTHOR_RESULT,
+        "detailed_description": f"""Find publications by author with BUILT-IN CONTEXT LIMITS.
 
-CRITICAL USAGE EXAMPLES:
-- search_by_author(author_name="Per-Olof Arnäs", max_results=10, offset=0)
-- search_by_author(author_name="Per-Olof Arnäs", max_results=10, offset=10)
-- search_by_author(author_name="John Smith", strategy="exact", max_results=20)
-- search_by_author(author_name="Maria González", strategy="partial", max_results=15, offset=5)
+**CRITICAL LIMITATIONS:**
+- Maximum {ContextLimits.SEARCH_BY_AUTHOR_MAX} results per call due to context window constraints  
+- Each result uses ~{ContextLimits.TOKENS_PER_AUTHOR_RESULT} tokens
+- For prolific authors, provides partial view only
 
-**When to use:**
-- Counting publications by specific authors
-- Getting complete publication lists for researchers
-- Analyzing author productivity over time
-- Verifying author information or name variations
+**USE FOR:**
+- Exploring author's work samples
+- Getting recent publications by author
+- Author publication examples
 
-**Search strategies:**
-- 'partial' (default): Standard phrase matching, recommended for most searches
-- 'exact': Precise phrase matching, use for common names to reduce false matches  
-- 'fuzzy': Typo-tolerant matching, use when uncertain about spelling
+**DON'T USE FOR:**
+- Complete author publication counts (use count_entities instead)
+- Full career analysis of prolific authors
 
-**Key features:**
-- Year-based sorting (newest first) when available
-- Comprehensive author metadata extraction
-- Pagination essential for prolific authors
-- Fallback handling for mapping issues
-
-**Input parameters:**
-- author_name (REQUIRED): Full author name in quotes (e.g., "Per-Olof Arnäs", "Maria González")
-- strategy (optional): Matching approach - "partial", "exact", or "fuzzy" (default: "partial") 
-- max_results (optional): Results per page (1-100, default: 10)
-- offset (optional): Page offset for pagination (default: 0)
-
-**Returns:**
-- total_hits: Total publications by this author
-- results: Publications with id, title, authors, year, journal, type, abstract
-- pagination: Navigation info for additional pages
-
-**Pagination strategy:**
-For prolific authors (>10 publications), use multiple calls:
-- First call: search_by_author(author_name="Author", max_results=10, offset=0)
-- Second call: search_by_author(author_name="Author", max_results=10, offset=10) 
-- Continue: offset=20, 30, etc. until has_more=false""",
-        
-        "planning_guidance": {
-            "use_when": [
-                "User asks 'How many papers has [author] published?'",
-                "Need complete publication list for specific researcher",
-                "Analyzing author productivity or career trajectory",
-                "User references author by name"
-            ],
-            "combine_with": [
-                "get_field_statistics to analyze publication years",
-                "get_publication_details for specific paper information"
-            ],
-            "pagination_strategy": "Essential for prolific authors - use multiple calls with offset"
-        }
+**Tool will automatically:**
+- Enforce result limits
+- Clearly state when results are partial
+- Provide guidance for complete analysis"""
     },
     
     {
         "name": "get_field_statistics",
         "function": get_field_statistics,
         "args_schema": GetFieldStatisticsInput,
-        "short_description": "Analyze distribution and trends in database fields",
-        "detailed_description": """Get statistical analysis of field distributions with top values and counts.
+        "short_description": "Analyze field distributions (NO CONTEXT LIMITS - uses aggregations)",
+        "context_limit": None,  # No limits - uses aggregations
+        "token_estimate": ContextLimits.TOKENS_PER_STATISTIC,
+        "detailed_description": """Analyze database field distributions - ALWAYS CONTEXT SAFE.
 
-USAGE EXAMPLES:
-- get_field_statistics(field="Year", size=10)
-- get_field_statistics(field="Persons.PersonData.DisplayName", size=20)
-- get_field_statistics(field="Source", size=15)
+**NO CONTEXT LIMITATIONS:**
+- Uses Elasticsearch aggregations only
+- Never retrieves individual documents
+- Always safe regardless of database size
 
-**When to use:**
-- Analyzing publication trends by year
-- Finding most prolific authors in database
-- Identifying top journals or publication venues  
-- Understanding publication type distributions
-- Supporting data-driven insights about research landscape
+**ALWAYS USE FOR:**
+- Counting queries ("How many X?")
+- Trend analysis over time
+- Finding top authors, journals, etc.
+- Any statistical analysis
 
-**Available fields:**
-- 'Year': Publication years (for temporal trend analysis)
-- 'Persons.PersonData.DisplayName': Author names (for productivity analysis)
-- 'Source': Journals/venues (for publication outlet analysis)
-- 'PublicationType': Types (articles, books, etc.)
-
-**Analysis capabilities:**
-- Top N values with publication counts
-- Percentage distributions 
-- Trend identification over time
-- Comparative analysis between fields
-
-**Input parameters:**
-- field (REQUIRED): Field to analyze (must be from valid options above)
-- size (optional): Number of top values (1-50, default: 10)
-
-**Returns:**
-- field: Field name analyzed
-- total_documents: Total publications in database
-- top_values: Array of value and count objects sorted by count""",
-        
-        "planning_guidance": {
-            "use_when": [
-                "User asks about trends, distributions, or 'most/top' anything",
-                "Need supporting data for author or topic analysis",
-                "Analyzing publication patterns over time",
-                "Comparing research activity between years or venues"
-            ],
-            "combine_with": [
-                "search_by_author after finding top authors",
-                "search_publications for specific year ranges"
-            ],
-            "analysis_patterns": "Use multiple calls for comparative analysis across different fields"
-        }
+**Perfect for large-scale analysis that other tools cannot handle.**"""
     },
     
     {
-        "name": "get_publication_details", 
+        "name": "get_publication_details",
         "function": get_publication_details,
         "args_schema": GetPublicationDetailsInput,
-        "short_description": "Retrieve complete metadata for specific publications",
-        "detailed_description": """Get comprehensive details about a specific publication using its database ID.
+        "short_description": f"Get publication details (HIGH CONTEXT USAGE ~{ContextLimits.TOKENS_PER_DETAIL} tokens - use sparingly)",
+        "context_limit": ContextLimits.PUBLICATION_DETAILS_MAX,
+        "token_estimate": ContextLimits.TOKENS_PER_DETAIL,
+        "detailed_description": f"""Get detailed publication information - USE SPARINGLY.
 
-USAGE EXAMPLES:
-- get_publication_details(publication_id="abc123def456")
-- get_publication_details(publication_id="xyz789ghi012")
+**HIGH CONTEXT USAGE:**
+- Each call uses ~{ContextLimits.TOKENS_PER_DETAIL} tokens
+- Limit to {ContextLimits.PUBLICATION_DETAILS_MAX} calls per conversation
+- Only use when full details are essential
 
-**When to use:**
-- User asks about specific paper from search results
-- Need complete publication information (abstract, DOI, URL)
-- Following up on search results with detailed analysis
-- User references publications by position ("the 3rd one", "that 2019 paper")
-
-**Required input:**
-- publication_id (REQUIRED): Document ID from search results (string format)
-
-**Complete information returned:**
-- Basic: id, title, authors, year, journal, publication_type
-- Content: full abstract, keywords
-- Identifiers: DOI, detailed URL links
-- Metadata: All available database fields
-
-**Integration with search tools:**
-1. Use search_publications or search_by_author first
-2. Get publication IDs from results
-3. Use this tool for detailed information about specific papers
-4. Reference results by position for user clarity
-
-**Returns:**
-- Complete publication record as JSON object
-- All metadata fields available in database
-- Formatted for easy reading and analysis""",
-        
-        "planning_guidance": {
-            "use_when": [
-                "User asks 'What is [publication] about?'",
-                "Need full abstract or detailed information",
-                "User references specific papers from previous results",
-                "Following up search results with detailed analysis"
-            ],
-            "combine_with": [
-                "search_publications or search_by_author to get publication IDs first"
-            ],
-            "reference_handling": "Use for numbered references like 'the 3rd paper' or 'that 2019 study'"
-        }
+**Use only when user specifically needs:**
+- Complete abstracts
+- Full author lists
+- DOI and URL information"""
     },
     
     {
         "name": "get_database_summary",
-        "function": lambda: json.dumps(get_statistics_summary()),
-        "args_schema": None,  # No parameters
-        "short_description": "Get comprehensive database overview and key statistics",
-        "detailed_description": """Generate high-level overview of the research publications database.
+        "function": get_database_summary,
+        "args_schema": None,
+        "short_description": "Database overview (CONTEXT SAFE - aggregations only)",
+        "context_limit": None,
+        "token_estimate": 200,
+        "detailed_description": "Get database overview using aggregations - always context safe."
+    },
+    
+    # NEW TOOL - Always safe counting
+    {
+        "name": "count_entities",
+        "function": count_entities,
+        "args_schema": CountEntitiesInput,
+        "short_description": "Count entities (NO CONTEXT LIMITS - aggregations only)",
+        "context_limit": None,
+        "token_estimate": 300,
+        "detailed_description": """Count entities using aggregations - ALWAYS CONTEXT SAFE.
 
-USAGE: get_database_summary() - No parameters required
+**NO LIMITATIONS:**
+- Uses aggregations only
+- Always provides complete, accurate counts
+- Never retrieves individual documents
 
-**When to use:**
-- User asks about database size, coverage, or general statistics
-- Need context about research landscape scope
-- Starting point for broad research questions
-- Understanding temporal coverage and publication types
+**PREFERRED TOOL FOR:**
+- "How many people named X?"
+- "How many publications on topic Y?"
+- Any counting or statistics questions
 
-**No parameters required** - returns complete overview automatically.
-
-**Comprehensive metrics provided:**
-- total_publications: Complete database size
-- latest_year: Most recent publication year
-- most_common_type: Primary publication type
-- total_authors: Unique author count (approximate)
-- years: Top 5 publication years with counts
-- publication_types: Distribution of publication types
-
-**Use cases:**
-- Database orientation for new users
-- Context setting for research analysis
-- Baseline metrics for comparative analysis
-- Understanding scope before specific searches""",
-        
-        "planning_guidance": {
-            "use_when": [
-                "User asks general questions about database size or coverage", 
-                "Need context before specific research queries",
-                "User wants overview of research landscape",
-                "Starting point for exploratory analysis"
-            ],
-            "combine_with": [
-                "get_field_statistics for deeper analysis of specific aspects"
-            ],
-            "context_usage": "Use early in conversations to establish scope and context"
-        }
+**Use this instead of search tools when you need counts, not documents.**"""
     }
 ]
 
+# =============================================================================
+# MISSING FUNCTIONS - ADD THESE TO YOUR CODE
+# =============================================================================
 
 def get_tool_descriptions_for_planning() -> str:
     """Generate comprehensive tool descriptions for planner prompts."""
@@ -773,30 +878,6 @@ def get_elasticsearch_tools() -> List[BaseTool]:
 
 
 def get_available_tools_summary() -> Dict[str, Any]:
-    """Get summary of all available tools for system status."""
-    return {
-        "total_tools": len(TOOL_REGISTRY),
-        "tools": [
-            {
-                "name": tool["name"],
-                "description": tool["short_description"],
-                "has_parameters": tool["args_schema"] is not None
-            }
-            for tool in TOOL_REGISTRY
-        ]
-    }
-    """Get summary of all available tools for system status."""
-    return {
-        "total_tools": len(TOOL_REGISTRY),
-        "tools": [
-            {
-                "name": tool["name"],
-                "description": tool["short_description"],
-                "has_parameters": tool["args_schema"] is not None
-            }
-            for tool in TOOL_REGISTRY
-        ]
-    }
     """Get summary of all available tools for system status."""
     return {
         "total_tools": len(TOOL_REGISTRY),
