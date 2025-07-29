@@ -1,0 +1,16 @@
+CURRENT TASK: {task}
+
+ORIGINAL QUERY: {original_query}
+
+CONVERSATION CONTEXT:
+{conversation_context}
+
+PREVIOUS STEPS THIS QUESTION:
+{previous_steps}
+
+INSTRUCTIONS:
+- Use the conversation context to build on previous knowledge
+- Avoid repeating searches for information already available
+- If you have relevant context from conversation history, incorporate it
+- Focus on answering the original query comprehensively
+- Be efficient: if you have sufficient information, provide a complete answer

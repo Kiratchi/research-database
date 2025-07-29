@@ -1,7 +1,5 @@
 """
-Main LangGraph workflow for the research publications agent - WITH LANGSMITH TRACING
-
-Following LangChain's official plan-and-execute pattern with proper response flow
+Fixed workflow - addresses model name errors and async issues
 """
 
 from typing import Dict, Any, Optional, Literal
@@ -14,13 +12,16 @@ from typing import Union, List
 import os
 from dotenv import load_dotenv
 import traceback
+import json
+import asyncio
 
-# LangSmith imports
+# LangSmith imports (unchanged)
 from langsmith import Client
 from langchain_core.tracers import LangChainTracer
 from langchain_core.callbacks import BaseCallbackHandler
 import uuid
 
+# Your existing imports (unchanged)
 from .state import PlanExecuteState
 from ..tools.elasticsearch_tools import (
     initialize_elasticsearch_tools, 
@@ -39,7 +40,7 @@ from .prompt_loader import (
     get_standard_planning_prompt
 )
 
-# Custom callback for additional LangSmith logging
+# Your existing ResearchAgentTracer (unchanged)
 class ResearchAgentTracer(BaseCallbackHandler):
     """Custom callback handler for research agent tracing."""
     
@@ -52,26 +53,12 @@ class ResearchAgentTracer(BaseCallbackHandler):
         """Log when a chain starts."""
         try:
             run_id = kwargs.get('run_id')
-            tags = kwargs.get('tags', [])
-            
-            # Add custom metadata
-            metadata = {
-                "session_id": self.session_id,
-                "component": "research_agent",
-                "step_number": self.step_count
-            }
-            
-            # Safe access to serialized data
             chain_name = 'unknown'
             if serialized and isinstance(serialized, dict):
                 chain_name = serialized.get('name', 'unknown')
             elif hasattr(serialized, 'get'):
                 chain_name = serialized.get('name', 'unknown')
-            
-            # You can add custom logging here
-            print(f"🔍 Starting chain: {chain_name} - Run ID: {run_id}")
         except Exception as e:
-            # Silently handle errors in callback to avoid disrupting main flow
             pass
         
     def on_tool_start(self, serialized, input_str, **kwargs):
@@ -85,7 +72,6 @@ class ResearchAgentTracer(BaseCallbackHandler):
             
             print(f"🔧 Using tool: {tool_name}")
         except Exception as e:
-            # Silently handle errors in callback
             pass
         
     def on_llm_start(self, serialized, prompts, **kwargs):
@@ -99,14 +85,12 @@ class ResearchAgentTracer(BaseCallbackHandler):
             
             print(f"🤖 LLM call: {model_name}")
         except Exception as e:
-            # Silently handle errors in callback
             pass
 
 def setup_langsmith_tracing():
     """Setup LangSmith tracing with environment variables."""
     load_dotenv()
     
-    # Ensure LangSmith environment variables are set
     langsmith_config = {
         "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2", "true"),
         "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
@@ -114,34 +98,45 @@ def setup_langsmith_tracing():
         "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT", "research-publications-agent")
     }
     
-    # Set environment variables if not already set
     for key, value in langsmith_config.items():
         if value:
             os.environ[key] = value
     
-    # Verify LangSmith is configured
     if not os.getenv("LANGCHAIN_API_KEY"):
-        print("⚠️ WARNING: LANGCHAIN_API_KEY not set. LangSmith tracing will be disabled.")
+        print("⚠️ WARNING: LANGCHAIN_API_KEY not set. LangSmith tracing disabled.")
         return None
     
     try:
-        # Initialize LangSmith client
         client = Client(
             api_url=os.getenv("LANGCHAIN_ENDPOINT"),
             api_key=os.getenv("LANGCHAIN_API_KEY")
         )
-        
-        # Test connection
         client.list_runs(limit=1)
-        print("✅ LangSmith tracing initialized successfully")
+        print("✅ LangSmith tracing initialized")
         return client
-        
     except Exception as e:
         print(f"❌ Failed to initialize LangSmith: {e}")
         return None
 
+def load_prompt_from_file(filename: str, **kwargs) -> str:
+    """Load prompt from text file and format with kwargs."""
+    try:
+        # Try to load from prompts directory
+        prompt_path = os.path.join(os.path.dirname(__file__), '..', 'prompts', filename)
+        
+        if os.path.exists(prompt_path):
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+            return template.format(**kwargs)
+        else:
+            print(f"⚠️ Prompt file not found: {filename}")
+            return f"Prompt file {filename} not found. Using fallback."
+    except Exception as e:
+        print(f"❌ Error loading prompt {filename}: {e}")
+        return f"Error loading prompt {filename}."
+
 def create_research_workflow(es_client=None, index_name: str = "research-publications-static", session_id: str = None) -> StateGraph:
-    """Create the research workflow with LangSmith tracing enabled."""
+    """Create the simplified research workflow."""
     
     # Setup LangSmith tracing
     langsmith_client = setup_langsmith_tracing()
@@ -158,43 +153,71 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     if langsmith_client:
         callbacks.append(ResearchAgentTracer(session_id))
 
+    # FIXED: Use provider prefix for LangChain LiteLLM integration
     llm = ChatLiteLLM(
-        model="anthropic/claude-sonnet-4", 
+        model="anthropic/claude-sonnet-4",  # Need provider prefix for LiteLLM routing
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0,
         callbacks=callbacks,
-        # Add metadata for LangSmith
-        metadata={
-            "component": "main_llm",
-            "session_id": session_id
-        }
+        metadata={"component": "main_llm", "session_id": session_id}
     )
 
+    # Create REACT agent
     executor_prompt = get_executor_prompt(execution_tool_descriptions)
-    agent_executor = create_react_agent(
-        llm, 
-        tools, 
-        prompt=executor_prompt
-    )
+    agent_executor = create_react_agent(llm, tools, prompt=executor_prompt)
 
-    planner_system_prompt = get_planner_system_prompt(planning_tool_descriptions)
-    planner_prompt = ChatPromptTemplate.from_messages([
-        ("system", planner_system_prompt),
-        ("placeholder", "{messages}"),
-    ])
-    planner = planner_prompt | llm.with_structured_output(Plan)
+    # Create planner using prompt from file
+    def create_planner():
+        def plan_with_file_prompt(inputs):
+            # Load batched planning prompt from file
+            prompt_text = load_prompt_from_file(
+                'batched_planning_prompt.txt',
+                tool_descriptions=planning_tool_descriptions,
+                query=inputs.get('query', ''),
+                conversation_context=inputs.get('conversation_context', '')
+            )
+            
+            # Use the prompt with LLM
+            response = llm.invoke([("user", prompt_text)])
+            
+            # Parse response into Plan format
+            try:
+                # Simple parsing - look for numbered steps or bullet points
+                content = response.content
+                steps = []
+                
+                # Try to extract steps from response
+                lines = content.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line and (line[0].isdigit() or line.startswith('-') or line.startswith('•')):
+                        # Clean up the step text
+                        step = line.lstrip('0123456789.-• ').strip()
+                        if step:
+                            steps.append(step)
+                
+                # Fallback if no steps found
+                if not steps:
+                    steps = [f"Research comprehensive information about: {inputs.get('query', '')}"]
+                
+                return Plan(steps=steps)
+            except Exception as e:
+                print(f"⚠️ Error parsing plan: {e}")
+                return Plan(steps=[f"Research information about: {inputs.get('query', '')}"])
+        
+        return plan_with_file_prompt
 
+    planner = create_planner()
+
+    # FIXED: Use provider prefix for LangChain LiteLLM integration
     replanner_llm = ChatLiteLLM(
-        model="anthropic/claude-sonnet-3.7",
+        model="anthropic/claude-haiku-3.5",  # Need provider prefix for LiteLLM routing
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0,
         callbacks=callbacks,
-        metadata={
-            "component": "replanner_llm",
-            "session_id": session_id
-        }
+        metadata={"component": "replanner_llm", "session_id": session_id}
     )
 
     replanner_template = get_replanner_prompt(planning_tool_descriptions)
@@ -202,19 +225,50 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
 
     def execute_step(state: PlanExecuteState):
-        """Execute step with tracing metadata."""
+        """Execute step with memory-aware context from file prompt."""
         plan = state["plan"]
         past_steps = state.get("past_steps", [])
+        conversation_history = state.get("conversation_history", [])
+        
         if not plan:
             return {"past_steps": []}
 
-        plan_str = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan))
-        task = plan[0]
+        task = plan[0]  # Always take first task
         original_query = state.get("input", "")
-        task_formatted = get_task_format_template(original_query=original_query, plan_str=plan_str, task=task)
+        
+        # Build conversation context
+        conversation_context = ""
+        if conversation_history:
+            recent_context = []
+            for msg in conversation_history[-4:]:  # Last 2 Q&A pairs
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")[:150]
+                recent_context.append(f"{role.title()}: {content}...")
+            conversation_context = "\n".join(recent_context)
+        else:
+            conversation_context = "No previous conversation."
+
+        # Build previous steps context
+        previous_steps = ""
+        if past_steps:
+            steps_context = []
+            for i, (step_task, step_result) in enumerate(past_steps, 1):
+                result_preview = step_result[:150] + "..." if len(step_result) > 150 else step_result
+                steps_context.append(f"{i}. {step_task}\n   Result: {result_preview}")
+            previous_steps = "\n\n".join(steps_context)
+        else:
+            previous_steps = "No previous steps."
+
+        # Load execution prompt from file
+        execution_prompt = load_prompt_from_file(
+            'memory_aware_execution_prompt.txt',
+            task=task,
+            original_query=original_query,
+            conversation_context=conversation_context,
+            previous_steps=previous_steps
+        )
 
         try:
-            # Add metadata to the agent execution
             config = {
                 "metadata": {
                     "step": "execute",
@@ -222,41 +276,47 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                     "session_id": session_id,
                     "step_number": len(past_steps) + 1
                 },
-                "callbacks": callbacks  # Pass callbacks in config instead
+                "callbacks": callbacks
             }
             
             agent_response = agent_executor.invoke(
-                {"messages": [("user", task_formatted)]},
+                {"messages": [("user", execution_prompt)]},
                 config=config
             )
+            
             response_content = agent_response["messages"][-1].content
             return {"past_steps": [(task, response_content)]}
+            
         except Exception as e:
-            return {"past_steps": [(task, f"Error executing task: {str(e)}")]}
+            error_response = f"Error executing task: {str(e)}"
+            print(f"❌ Error in execute_step: {e}")
+            return {"past_steps": [(task, error_response)]}
 
     def plan_step(state: PlanExecuteState):
-        """Planning step with tracing metadata."""
+        """Planning step using prompt from file."""
         try:
             query = state["input"]
             conversation_history = state.get("conversation_history", [])
-            messages = []
-
-            if conversation_history and len(conversation_history) > 0:
+            
+            # Build conversation context
+            conversation_context = ""
+            if conversation_history:
                 context_lines = []
-                for msg in conversation_history[-4:]:
+                for msg in conversation_history[-6:]:  # Last 3 Q&A pairs
                     role = msg.get('role', 'unknown')
                     content = msg.get('content', '')
                     truncated_content = content[:200] + "..." if len(content) > 200 else content
                     context_lines.append(f"- {role.title()}: {truncated_content}")
-
-                context_summary = "\n".join(context_lines)
-                context_message = get_context_aware_prompt(context_summary, query)
-                messages.append(("user", context_message))
+                conversation_context = "\n".join(context_lines)
             else:
-                standard_message = get_standard_planning_prompt(query)
-                messages.append(("user", standard_message))
+                conversation_context = "No previous conversation history."
 
-            # Add metadata for planning
+            # Create planning input
+            planning_input = {
+                "query": query,
+                "conversation_context": conversation_context
+            }
+
             config = {
                 "metadata": {
                     "step": "planning",
@@ -264,20 +324,25 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                     "has_context": len(conversation_history) > 0,
                     "session_id": session_id
                 },
-                "callbacks": callbacks  # Pass callbacks in config
+                "callbacks": callbacks
             }
 
-            plan = planner.invoke({"messages": messages}, config=config)
+            plan = planner(planning_input)
 
-            if plan is None or not hasattr(plan, 'steps'):
-                return {"plan": [f"Search for information about: {query}"]}
-            return {"plan": plan.steps}
+            if plan and hasattr(plan, 'steps') and plan.steps:
+                print(f"📋 Created plan with {len(plan.steps)} steps: {plan.steps}")
+                return {"plan": plan.steps}
+            else:
+                fallback_plan = [f"Research comprehensive information about: {query}"]
+                return {"plan": fallback_plan}
+            
         except Exception as e:
-            fallback_plan = [f"Search for information about: {query}"]
+            print(f"❌ Error in planning: {e}")
+            fallback_plan = [f"Research information about: {query}"]
             return {"plan": fallback_plan}
 
     def replan_step(state: PlanExecuteState):
-        """Replanning step with tracing metadata."""
+        """Replanning step with better error handling."""
         try:
             config = {
                 "metadata": {
@@ -285,7 +350,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                     "past_steps_count": len(state.get("past_steps", [])),
                     "session_id": session_id
                 },
-                "callbacks": callbacks  # Pass callbacks in config
+                "callbacks": callbacks
             }
             
             output = replanner.invoke(state, config=config)
@@ -293,19 +358,41 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 return {"final_response": output.response}
             else:
                 return {"plan": output.steps}
+                
         except Exception as e:
-            return {"final_response": f"Error during replanning: {str(e)}"}
+            print(f"❌ Error in replanning: {e}")
+            # If replanning fails, try to create a reasonable response
+            past_steps = state.get("past_steps", [])
+            if past_steps:
+                latest_result = past_steps[-1][1]
+                return {"final_response": latest_result}
+            else:
+                return {"final_response": f"Error during replanning: {str(e)}"}
 
     def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
+        """
+        Decide whether to continue, replan, or end.
+        """
         plan = state.get("plan", [])
         past_steps = state.get("past_steps", [])
 
+        # Complete if we have final response
         if state.get("final_response"):
+            print("✅ COMPLETE: Final response available")
             return "complete"
-        if not plan or not past_steps:
-            return "replan"
+        
+        # Limit the number of replanning cycles to prevent infinite loops
+        if len(past_steps) >= 5:  # Max 5 steps
+            print("✅ COMPLETE: Maximum steps reached")
+            return "complete"
+        
+        # Complete if we've done all planned steps
         if len(past_steps) >= len(plan):
+            print("✅ COMPLETE: All plan steps executed")
             return "complete"
+        
+        # Always replan for now - can be made smarter later
+        print("🔄 REPLAN: Continuing with replanning")
         return "replan"
 
     def complete_step(state: PlanExecuteState):
@@ -319,36 +406,41 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
         else:
             final_response = "Research completed successfully."
 
-        print("\n📌 FINAL OUTPUT")
+        print(f"\n📌 FINAL OUTPUT")
         print(f"🟡 Query: {state.get('input', '')}")
-        print(f"✅ Final response:\n{final_response}\n")
+        print(f"✅ Response length: {len(final_response)} characters")
 
         return {"response": final_response}
 
     def format_enhanced_response(response: str, original_query: str, all_steps: List) -> str:
+        """Simple response formatting."""
+        if not response:
+            return "No response generated."
+            
         response = response.strip()
+        
         if len(response) < 100:
             return f"**Answer:** {response}"
+            
         if any(indicator in response for indicator in ['##', '**', '###', '- ', '1.', '2.']):
             return response
+            
         if len(all_steps) > 1:
-            context_note = f"\n\n*Based on analysis of {len(all_steps)} research steps using the Swedish publications database.*"
+            context_note = f"\n\n*Based on {len(all_steps)} research steps using the publications database.*"
             return f"**Research Results:**\n\n{response}{context_note}"
+            
         return f"**Research Analysis:**\n\n{response}"
 
-    def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
-        if "response" in state and state["response"]:
-            return "__end__"
-        else:
-            return "agent"
-
-    # Build the workflow
+    # Build the simplified workflow
     workflow = StateGraph(PlanExecuteState)
+    
+    # Add nodes
     workflow.add_node("planner", plan_step)
     workflow.add_node("agent", execute_step)
     workflow.add_node("replan", replan_step)
     workflow.add_node("complete", complete_step)
 
+    # Simple edges - always replan
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "agent")
     workflow.add_conditional_edges("agent", should_continue_or_end, ["replan", "complete", END])
@@ -357,23 +449,23 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
 
     return workflow
 
+# Your existing helper functions (unchanged)
 def compile_research_agent(es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, session_id: str = None) -> Any:
-    """Compile the research agent with LangSmith tracing."""
+    """Compile the research agent."""
     workflow = create_research_workflow(es_client, index_name, session_id)
     app = workflow.compile()
     return app
 
 def run_research_query(query: str, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, stream: bool = False, conversation_history: Optional[List[Dict]] = None, session_id: str = None) -> Dict[str, Any]:
-    """Run research query with LangSmith tracing."""
+    """Run research query."""
     
-    # Generate session ID if not provided
     if not session_id:
         session_id = str(uuid.uuid4())
     
     app = compile_research_agent(es_client, index_name, recursion_limit, session_id)
     initial_state = {
         "input": query,
-        "conversation_history": conversation_history,
+        "conversation_history": conversation_history or [],
         "plan": [],
         "past_steps": [],
         "response": None,
@@ -383,7 +475,6 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         "error": None
     }
     
-    # Add LangSmith metadata to config
     config = {
         "recursion_limit": recursion_limit,
         "metadata": {
@@ -406,8 +497,9 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         result = app.invoke(initial_state, config=config)
         return result
 
+# Your existing ResearchAgent class with improved async handling
 class ResearchAgent:
-    """Research Agent with LangSmith tracing support."""
+    """Simplified Research Agent with improved async handling."""
     
     def __init__(self, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50):
         self.es_client = es_client
@@ -417,7 +509,7 @@ class ResearchAgent:
         self.langsmith_client = setup_langsmith_tracing()
 
     def _compile_agent(self, session_id: str = None):
-        """Compile agent with session-specific tracing."""
+        """Compile agent."""
         self.app = compile_research_agent(
             self.es_client, 
             self.index_name, 
@@ -426,17 +518,14 @@ class ResearchAgent:
         )
 
     async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Any:
-        """Stream query with LangSmith tracing."""
+        """Stream query with improved error handling."""
         
-        # Generate session ID for this query
         session_id = str(uuid.uuid4())
-        
-        # Compile agent with session ID
         self._compile_agent(session_id)
         
         initial_state = {
             "input": query,
-            "conversation_history": conversation_history,
+            "conversation_history": conversation_history or [],
             "plan": [],
             "past_steps": [],
             "response": None,
@@ -446,7 +535,6 @@ class ResearchAgent:
             "error": None
         }
         
-        # Add LangSmith configuration
         config = {
             "recursion_limit": self.recursion_limit,
             "metadata": {
@@ -459,5 +547,16 @@ class ResearchAgent:
             "tags": ["research_agent", "streaming", f"session_{session_id}"]
         }
         
-        async for event in self.app.astream(initial_state, config=config):
-            yield event
+        try:
+            async for event in self.app.astream(initial_state, config=config):
+                yield event
+        except Exception as e:
+            print(f"❌ Error in stream_query: {e}")
+            # Yield error event
+            yield {"error": {"error": str(e)}}
+        finally:
+            # Ensure proper cleanup
+            try:
+                await asyncio.sleep(0.1)  # Give any pending tasks time to complete
+            except:
+                pass

@@ -736,7 +736,8 @@
 
                     if (data.response_content && data.response_content.trim()) {
                         this.addMessage('assistant', data.response_content);
-                        this.updateConversationHistory(message, data.response_content);
+                        // Memory is now managed automatically by the backend
+                        console.log('✅ Response received, memory managed automatically');
                     } else {
                         this.addMessage('assistant', 'I didn\'t generate a response. Please try again.');
                     }
@@ -835,27 +836,6 @@
                 const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
                 this.messageInput.style.height = newHeight + 'px';
             }
-            
-            async updateConversationHistory(query, response) {
-                try {
-                    const result = await fetch('/chat/update-history', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            query, 
-                            response,
-                            session_id: this.sessionId
-                        })
-                    });
-
-                    const data = await result.json();
-                    if (data.success) {
-                        console.log(`✅ Conversation history updated: ${data.conversation_length} messages`);
-                    }
-                } catch (error) {
-                    console.error('❌ Error updating conversation history:', error);
-                }
-            }
         }
         
         async function clearConversation() {
@@ -866,6 +846,7 @@
             try {
                 const app = window.chatApp;
                 
+                // Call the backend clear-memory endpoint
                 const response = await fetch('/chat/clear-memory', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
