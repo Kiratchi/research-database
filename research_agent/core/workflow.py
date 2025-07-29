@@ -1,5 +1,5 @@
 """
-Fixed workflow - addresses model name errors and async issues
+Updated workflow - Clean integration with new tools system
 """
 
 from typing import Dict, Any, Optional, Literal
@@ -23,13 +23,6 @@ import uuid
 
 # Your existing imports (unchanged)
 from .state import PlanExecuteState
-from ..old_tools.elasticsearch_tools import (
-    initialize_elasticsearch_tools, 
-    create_elasticsearch_tools,
-    get_tool_descriptions_for_planning,
-    get_tool_descriptions_for_execution
-)
-
 from .models import Plan, Response, Act
 from .prompt_loader import (
     get_executor_prompt,
@@ -39,6 +32,11 @@ from .prompt_loader import (
     get_context_aware_prompt,
     get_standard_planning_prompt
 )
+
+# NEW TOOLS IMPORT - This is the main change!
+from ..tools.search.registry import get_all_tools
+
+
 
 # Your existing ResearchAgentTracer (unchanged)
 class ResearchAgentTracer(BaseCallbackHandler):
@@ -87,6 +85,7 @@ class ResearchAgentTracer(BaseCallbackHandler):
         except Exception as e:
             pass
 
+
 def setup_langsmith_tracing():
     """Setup LangSmith tracing with environment variables."""
     load_dotenv()
@@ -118,6 +117,7 @@ def setup_langsmith_tracing():
         print(f"❌ Failed to initialize LangSmith: {e}")
         return None
 
+
 def load_prompt_from_file(filename: str, **kwargs) -> str:
     """Load prompt from text file and format with kwargs."""
     try:
@@ -135,18 +135,108 @@ def load_prompt_from_file(filename: str, **kwargs) -> str:
         print(f"❌ Error loading prompt {filename}: {e}")
         return f"Error loading prompt {filename}."
 
+
+def get_enhanced_tool_descriptions_for_planning() -> str:
+    """
+    Generate enhanced tool descriptions using the new tools system.
+    This replaces your old get_tool_descriptions_for_planning function.
+    """
+    # Get tools without ES client (descriptions don't need actual connection)
+    try:
+        sample_tools = get_all_tools()
+        
+        descriptions = []
+        for tool in sample_tools:
+            # Get the full tool description and input schema
+            tool_desc = f"""**{tool.name}**: {tool.description}
+
+**Input Parameters:**"""
+            
+            # Extract parameter descriptions from the tool's args_schema
+            if hasattr(tool, 'args_schema') and tool.args_schema:
+                schema = tool.args_schema
+                
+                # Handle Pydantic model fields
+                if hasattr(schema, 'model_fields'):
+                    # Pydantic v2
+                    for field_name, field_info in schema.model_fields.items():
+                        field_desc = getattr(field_info, 'description', 'No description')
+                        default_val = getattr(field_info, 'default', None)
+                        if default_val is not None and default_val != ...:
+                            tool_desc += f"\n- {field_name}: {field_desc} (default: {default_val})"
+                        else:
+                            tool_desc += f"\n- {field_name}: {field_desc}"
+                elif hasattr(schema, '__fields__'):
+                    # Pydantic v1 fallback
+                    for field_name, field_info in schema.__fields__.items():
+                        field_desc = getattr(field_info.field_info, 'description', 'No description')
+                        tool_desc += f"\n- {field_name}: {field_desc}"
+            
+            # Add usage guidance based on tool name
+            if tool.name == "unified_search":
+                tool_desc += """
+
+**Key Capabilities:**
+- Advanced filtering by authors, years, publication types, sources, keywords, language
+- Multiple sorting options: relevance, year_desc, year_asc, title_asc, citations_desc
+- Field-specific searching: title, abstract, authors, keywords, source, or all
+- Pagination support with has_more indicators
+- Error handling with helpful suggestions
+
+**Best Practices:**
+- Use filters to narrow results for specific research questions
+- Use sort_by="year_desc" for recent publications
+- Use field_selection="minimal" for quick searches, "full" for comprehensive analysis
+- Combine multiple filters for precise searches (e.g., specific author + year range + publication type)"""
+            
+            descriptions.append(tool_desc)
+        
+        return "\n\n" + "="*80 + "\n\n".join(descriptions)
+        
+    except Exception as e:
+        print(f"⚠️ Could not load tool descriptions: {e}")
+        return "**unified_search**: Comprehensive search tool for research publications with advanced filtering and sorting capabilities."
+
+
+def get_enhanced_tool_descriptions_for_execution() -> str:
+    """
+    Generate concise tool descriptions for executor prompts.
+    This replaces your old get_tool_descriptions_for_execution function.
+    """
+    try:
+        sample_tools = get_all_tools()
+        
+        descriptions = []
+        for tool in sample_tools:
+            tool_desc = f"- **{tool.name}**: {tool.description}"
+            descriptions.append(tool_desc)
+        
+        return "\n\n".join(descriptions)
+        
+    except Exception as e:
+        print(f"⚠️ Could not load execution descriptions: {e}")
+        return "- **unified_search**: Comprehensive search tool for research publications"
+
+
 def create_research_workflow(es_client=None, index_name: str = "research-publications-static", session_id: str = None) -> StateGraph:
-    """Create the simplified research workflow."""
+    """Create the research workflow with new tools integration."""
     
     # Setup LangSmith tracing
     langsmith_client = setup_langsmith_tracing()
     
+    # NEW TOOLS INTEGRATION - Simple and clean!
     if es_client:
-        initialize_elasticsearch_tools(es_client, index_name)
-
-    tools = create_elasticsearch_tools()
-    planning_tool_descriptions = get_tool_descriptions_for_planning()
-    execution_tool_descriptions = get_tool_descriptions_for_execution()
+        # Get all tools with your ES client
+        tools = get_all_tools(es_client=es_client, index_name=index_name)
+        print(f"✅ Initialized {len(tools)} research tools with ES client")
+    else:
+        # For testing/development - uses default ES client from settings
+        tools = get_all_tools()
+        print(f"✅ Initialized {len(tools)} research tools with default settings")
+    
+    # Get enhanced tool descriptions
+    planning_tool_descriptions = get_enhanced_tool_descriptions_for_planning()
+    execution_tool_descriptions = get_enhanced_tool_descriptions_for_execution()
 
     # Create LLM with tracing callbacks
     callbacks = []
@@ -155,7 +245,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
 
     # FIXED: Use provider prefix for LangChain LiteLLM integration
     llm = ChatLiteLLM(
-        model="anthropic/claude-sonnet-4",  # Need provider prefix for LiteLLM routing
+        model="anthropic/claude-sonnet-4",
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0,
@@ -163,7 +253,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
         metadata={"component": "main_llm", "session_id": session_id}
     )
 
-    # Create REACT agent
+    # Create REACT agent with new tools
     executor_prompt = get_executor_prompt(execution_tool_descriptions)
     agent_executor = create_react_agent(llm, tools, prompt=executor_prompt)
 
@@ -212,7 +302,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
 
     # FIXED: Use provider prefix for LangChain LiteLLM integration
     replanner_llm = ChatLiteLLM(
-        model="anthropic/claude-haiku-3.5",  # Need provider prefix for LiteLLM routing
+        model="anthropic/claude-haiku-3.5",
         api_key=os.getenv("LITELLM_API_KEY"),
         api_base=os.getenv("LITELLM_BASE_URL"),
         temperature=0,
@@ -370,9 +460,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 return {"final_response": f"Error during replanning: {str(e)}"}
 
     def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
-        """
-        Decide whether to continue, replan, or end - with replan limit.
-        """
+        """Decide whether to continue, replan, or end - with replan limit."""
         plan = state.get("plan", [])
         past_steps = state.get("past_steps", [])
 
@@ -449,12 +537,14 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
 
     return workflow
 
-# Your existing helper functions (unchanged)
+
+# Rest of your helper functions remain the same
 def compile_research_agent(es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, session_id: str = None) -> Any:
     """Compile the research agent."""
     workflow = create_research_workflow(es_client, index_name, session_id)
     app = workflow.compile()
     return app
+
 
 def run_research_query(query: str, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, stream: bool = False, conversation_history: Optional[List[Dict]] = None, session_id: str = None) -> Dict[str, Any]:
     """Run research query."""
@@ -497,9 +587,10 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         result = app.invoke(initial_state, config=config)
         return result
 
-# Your existing ResearchAgent class with improved async handling
+
+# Updated ResearchAgent class
 class ResearchAgent:
-    """Simplified Research Agent with improved async handling."""
+    """Research Agent with new tools integration."""
     
     def __init__(self, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50):
         self.es_client = es_client
@@ -518,7 +609,7 @@ class ResearchAgent:
         )
 
     async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Any:
-        """Standard LangGraph streaming - let GeneratorExit propagate naturally."""
+        """Standard LangGraph streaming."""
         
         session_id = str(uuid.uuid4())
         self._compile_agent(session_id)
@@ -547,7 +638,6 @@ class ResearchAgent:
             "tags": ["research_agent", "streaming", f"session_{session_id}"]
         }
         
-        # STANDARD LANGGRAPH WAY - No try/except GeneratorExit needed
+        # Standard LangGraph streaming
         async for event in self.app.astream(initial_state, config=config):
             yield event
-        # GeneratorExit will propagate naturally - this is expected behavior

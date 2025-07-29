@@ -1,7 +1,5 @@
-"""
-Tools for the research agent.
-"""
+"""Research tools package - drop-in replacement for research_agent tools."""
 
-from .elasticsearch_tools import create_elasticsearch_tools
+from .search.registry import get_all_tools
 
-__all__ = ["create_elasticsearch_tools"]
+__all__ = ['get_all_tools']

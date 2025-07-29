@@ -10,15 +10,15 @@ __author__ = "Research Agent Team"
 from .core.state import PlanExecuteState
 from .core.models import Plan, Response, Act
 from .core.workflow import ResearchAgent, run_research_query, compile_research_agent
-from .tools.elasticsearch_tools import create_elasticsearch_tools
+from .tools import get_all_tools
 
 __all__ = [
     "PlanExecuteState",
     "Plan", 
-    "Response",
+    "Response", 
     "Act",
     "ResearchAgent",
     "run_research_query", 
     "compile_research_agent",
-    "create_elasticsearch_tools",
+    "get_all_tools",  # New tools system
 ]

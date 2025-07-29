@@ -14,9 +14,14 @@ BATCHING GUIDELINES:
 
 BATCHING PATTERNS:
 - For "Who is [author]?" queries: "Research comprehensive information about [author] including publications, research areas, collaborations, and timeline"
-- For counting queries: "Get complete statistics and counts for [entity] using aggregation tools"
+- For counting queries: "Get complete statistics and counts for [entity] using the unified search tool with appropriate filters"
 - For comparison queries: "Gather comprehensive data for all entities being compared, then analyze differences"
+
+NEW TOOLS CAPABILITIES:
+- unified_search supports advanced filtering by authors, years, publication types, sources, keywords, and language
+- Single tool can handle complex queries that previously required multiple tools
+- Built-in pagination and error handling with helpful suggestions
 
 Create a plan for: {query}
 
-Remember: Fewer, more comprehensive steps are better than many small steps.
+Remember: Fewer, more comprehensive steps are better than many small steps. Use the unified_search tool's advanced filtering capabilities to gather comprehensive data efficiently.

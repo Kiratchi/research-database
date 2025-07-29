@@ -9,16 +9,8 @@ ORIGINAL QUERY: {original_query}
 **PREVIOUS STEPS THIS QUESTION:**
 {previous_steps}
 
-**CRITICAL TOOL LIMITATIONS:**
-🔴 **LIMITED TOOLS (Context-constrained):**
-- search_publications: MAX 15 results per call (use max_results=15)
-- search_by_author: MAX 20 results per call (use max_results=20)
-- get_publication_details: HIGH context usage - use sparingly
-
-🟢 **UNLIMITED TOOLS (Aggregation-based):**
-- get_field_statistics: Safe for large datasets
-- count_entities: Perfect for counting queries
-- get_database_summary: Context-safe statistical overview
+**TOOL CAPABILITIES:**
+You have access to the unified_search tool with comprehensive filtering and search capabilities.
 
 **MEMORY-AWARE EXECUTION INSTRUCTIONS:**
 
@@ -31,51 +23,33 @@ ORIGINAL QUERY: {original_query}
 **Reference Resolution:**
 - "them", "those", "these" → Identify what they refer to in conversation history
 - "the 3rd one", "number 5" → Reference specific indexed items from prior results
-- "more details about X" → Use get_publication_details if specific paper was mentioned
+- "more details about X" → Use unified_search with specific filters if a paper was mentioned
 
 **Pagination Strategy:**
 - For follow-up requests ("show me more", "get additional results"):
-  - Use offset parameter: search_by_author(author_name="X", max_results=20, offset=20)
-  - Always specify both max_results and offset explicitly
-- For large datasets, suggest statistical tools instead of multiple search calls
-
-**Tool Usage Guidelines:**
-- **search_by_author**: Always use max_results=20, specify offset for pagination
-- **search_publications**: Always use max_results=15, specify offset for pagination  
-- **get_publication_details**: Only when specific paper analysis is needed
-- **get_field_statistics**: Use for trends, distributions, top-N queries
-- **count_entities**: Use for "how many" questions
+  - Use offset parameter: offset=10, offset=20, etc.
+  - The tool will tell you if more results are available via has_more field
+- For large datasets, use appropriate filters to narrow results
 
 **Response Quality Standards:**
 - Include specific numbers and statistics when available
 - Mention pagination details for large result sets  
 - Use proper formatting (headers, bullet points) for readability
 - Cite specific publications by title and year when relevant
-- If fewer than total results are shown, clearly state that only a partial list is returned
+- If fewer than total results are shown, clearly state that and explain how to get more
 - Provide context about database coverage and limitations when appropriate
 
 **Efficiency Guidelines:**
 - Focus on answering the original query comprehensively
 - Be efficient: if you have sufficient information from context, provide a complete answer
-- Don't repeat expensive tool calls if information is already available
-- When context limits are reached, explain limitations and suggest alternatives
-
-**Example Usage Patterns:**
-```
-# First search
-search_by_author(author_name="Per-Olof Arnäs", max_results=20)
-
-# Follow-up for more results  
-search_by_author(author_name="Per-Olof Arnäs", max_results=20, offset=20)
-
-# For counting without context overflow
-count_entities(entity_type="authors_by_name", search_term="Arnäs")
-```
+- Don't repeat searches if information is already available
+- Use the tool's built-in error handling and suggestions
 
 **Communication Standards:**
-- Always acknowledge when results are partial due to tool limitations
+- Always acknowledge when results are partial
 - Provide guidance on how to get complete results when relevant
 - Reference conversation context to show continuity
-- Be honest about what the tools can and cannot accomplish
+- Be honest about what the tool can and cannot accomplish
 
-Execute the current task efficiently while respecting tool limitations and leveraging conversation context.
+Execute the current task efficiently while leveraging conversation context and the unified_search tool's capabilities.
+
