@@ -1,8 +1,8 @@
 """
-Flask application for the Research Publications Chat Agent - LOCAL VERSION
+Flask application for the Research Publications Chat Agent - WITH LANGSMITH TRACING
 
 This Flask app provides a web interface for the research agent system,
-calling the research workflow directly without any router layer.
+calling the research workflow directly with LangSmith observability.
 """
 
 import os
@@ -11,6 +11,7 @@ import asyncio
 import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+import uuid
 
 from flask import Flask, render_template, request, jsonify, Response, session, send_from_directory
 from flask_cors import CORS
@@ -19,9 +20,10 @@ from werkzeug.exceptions import BadRequest
 # Import the core research components directly
 from research_agent.core.workflow import ResearchAgent, run_research_query
 from elasticsearch import Elasticsearch
-    
-import traceback
 
+# LangSmith imports
+from langsmith import Client
+import traceback
 
 def handle_simple_query(query: str) -> Optional[str]:
     """Handle basic greetings and help requests with enhanced pattern matching."""
@@ -81,7 +83,7 @@ def handle_simple_query(query: str) -> Optional[str]:
 
 
 class FlaskResearchAgent:
-    """Flask wrapper for research agent access."""
+    """Flask wrapper for research agent access with LangSmith tracing."""
     
     def __init__(self):
         """Initialize the Flask research agent."""
@@ -92,10 +94,11 @@ class FlaskResearchAgent:
             "successful_queries": 0,
             "failed_queries": 0
         }
+        self.langsmith_client = None
         self.initialize_components()
     
     def initialize_components(self):
-        """Initialize Elasticsearch client."""
+        """Initialize Elasticsearch client and LangSmith."""
         try:
             # Initialize Elasticsearch client
             es_host = os.getenv("ES_HOST")
@@ -119,9 +122,22 @@ class FlaskResearchAgent:
                     self.es_client = None
             else:
                 print("❌ Elasticsearch credentials not found in environment")
+            
+            # Initialize LangSmith client
+            if os.getenv("LANGCHAIN_API_KEY"):
+                try:
+                    self.langsmith_client = Client(
+                        api_url=os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
+                        api_key=os.getenv("LANGCHAIN_API_KEY")
+                    )
+                    print("✅ LangSmith client initialized successfully")
+                except Exception as e:
+                    print(f"⚠️ LangSmith initialization warning: {e}")
+            else:
+                print("📝 LangSmith not configured (LANGCHAIN_API_KEY missing)")
                 
         except Exception as e:
-            print(f"❌ Error initializing Elasticsearch: {str(e)}")
+            print(f"❌ Error initializing components: {str(e)}")
             self.es_client = None
     
     def is_ready(self) -> bool:
@@ -131,9 +147,11 @@ class FlaskResearchAgent:
     def get_status(self) -> Dict[str, Any]:
         """Get current system status."""
         es_connected = self.es_client is not None and self.es_client.ping() if self.es_client else False
+        langsmith_configured = self.langsmith_client is not None
             
         return {
             "elasticsearch_connected": es_connected,
+            "langsmith_configured": langsmith_configured,
             "system_ready": self.is_ready(),
             "query_stats": self.query_stats,
             "index_name": self.index_name,
@@ -143,9 +161,13 @@ class FlaskResearchAgent:
             }
         }
     
-    def process_query_direct(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Dict[str, Any]:
-        """Process query directly without router."""
+    def process_query_direct(self, query: str, conversation_history: Optional[List[Dict]] = None, session_id: str = None) -> Dict[str, Any]:
+        """Process query directly without router with LangSmith tracing."""
         self.query_stats["total_queries"] += 1
+        
+        # Generate session ID if not provided
+        if not session_id:
+            session_id = str(uuid.uuid4())
         
         try:
             # Check for simple queries first
@@ -155,7 +177,10 @@ class FlaskResearchAgent:
                 return {
                     'success': True,
                     'response': simple_response,
-                    'metadata': {'workflow_type': 'simple_response'}
+                    'metadata': {
+                        'workflow_type': 'simple_response',
+                        'session_id': session_id
+                    }
                 }
             
             if not self.is_ready():
@@ -166,14 +191,15 @@ class FlaskResearchAgent:
                     'response': None
                 }
             
-            # Process with research workflow directly
+            # Process with research workflow directly with session ID
             result = run_research_query(
                 query=query,
                 es_client=self.es_client,
                 index_name=self.index_name,
                 recursion_limit=50,
                 stream=False,
-                conversation_history=conversation_history
+                conversation_history=conversation_history,
+                session_id=session_id  # Pass session ID for tracing
             )
             
             self.query_stats["successful_queries"] += 1
@@ -184,7 +210,7 @@ class FlaskResearchAgent:
                     'workflow_type': 'research_workflow',
                     'plan': result.get('plan', []),
                     'total_results': result.get('total_results'),
-                    'session_id': result.get('session_id')
+                    'session_id': session_id
                 }
             }
                 
@@ -196,9 +222,15 @@ class FlaskResearchAgent:
                 'response': None
             }
     
-    async def stream_query_direct(self, query: str, conversation_history: Optional[List[Dict]] = None):
-        """Stream a query directly using ResearchAgent."""
+    async def stream_query_direct(self, query: str, conversation_history: Optional[List[Dict]] = None, session_id: str = None):
+        """Stream a query directly using ResearchAgent with LangSmith tracing."""
+        
+        # Generate session ID if not provided
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            
         print(f"🔍 Direct Agent: Starting stream query: {query}")
+        print(f"🔍 Direct Agent: Session ID: {session_id}")
         print(f"🔍 Direct Agent: Conversation history length: {len(conversation_history) if conversation_history else 0}")
         
         self.query_stats["total_queries"] += 1
@@ -212,7 +244,8 @@ class FlaskResearchAgent:
                     'type': 'final',
                     'content': {
                         'response': simple_response,
-                        'workflow_type': 'simple_response'
+                        'workflow_type': 'simple_response',
+                        'session_id': session_id
                     },
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
@@ -263,7 +296,8 @@ class FlaskResearchAgent:
                             'content': {
                                 'response': final_response,
                                 'workflow_type': 'research_workflow',
-                                'source': '__end__ node'
+                                'source': '__end__ node',
+                                'session_id': session_id
                             },
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
@@ -277,7 +311,8 @@ class FlaskResearchAgent:
                             'content': {
                                 'response': final_response,
                                 'workflow_type': 'research_workflow',
-                                'source': 'complete node'
+                                'source': 'complete node',
+                                'session_id': session_id
                             },
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
@@ -292,7 +327,8 @@ class FlaskResearchAgent:
                                 'content': {
                                     'response': final_response,
                                     'workflow_type': 'research_workflow',
-                                    'source': 'replan node'
+                                    'source': 'replan node',
+                                    'session_id': session_id
                                 },
                                 'timestamp': datetime.now().isoformat()
                             }) + '\n'
@@ -301,7 +337,8 @@ class FlaskResearchAgent:
                                 'type': 'replan',
                                 'content': {
                                     **node_data,
-                                    'message': 'Updating research plan...'
+                                    'message': 'Updating research plan...',
+                                    'session_id': session_id
                                 },
                                 'timestamp': datetime.now().isoformat()
                             }) + '\n'
@@ -311,7 +348,8 @@ class FlaskResearchAgent:
                             'type': 'plan',
                             'content': {
                                 'plan': node_data.get('plan', []),
-                                'message': 'Creating research plan...'
+                                'message': 'Creating research plan...',
+                                'session_id': session_id
                             },
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
@@ -325,7 +363,8 @@ class FlaskResearchAgent:
                             'type': 'execution',
                             'content': {
                                 **node_data,
-                                'message': 'Executing research step...'
+                                'message': 'Executing research step...',
+                                'session_id': session_id
                             },
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
@@ -333,7 +372,10 @@ class FlaskResearchAgent:
                     else:
                         yield json.dumps({
                             'type': 'step',
-                            'content': node_data,
+                            'content': {
+                                **node_data,
+                                'session_id': session_id
+                            },
                             'node': node_name,
                             'timestamp': datetime.now().isoformat()
                         }) + '\n'
@@ -345,7 +387,8 @@ class FlaskResearchAgent:
                     'content': {
                         'response': final_response,
                         'workflow_type': 'research_workflow',
-                        'source': 'captured response'
+                        'source': 'captured response',
+                        'session_id': session_id
                     },
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
@@ -355,7 +398,8 @@ class FlaskResearchAgent:
                     'type': 'final',
                     'content': {
                         'response': f"Research completed but no final response was generated. Processed {event_count} events.",
-                        'workflow_type': 'research_workflow_incomplete'
+                        'workflow_type': 'research_workflow_incomplete',
+                        'session_id': session_id
                     },
                     'timestamp': datetime.now().isoformat()
                 }) + '\n'
@@ -436,13 +480,13 @@ def index():
 
 @app.route('/status')
 def status():
-    """Get system status."""
+    """Get system status including LangSmith configuration."""
     return jsonify(research_agent.get_status())
 
 
 @app.route('/chat/respond', methods=['POST'])
 def chat_respond():
-    """Non-streaming endpoint for chat responses."""
+    """Non-streaming endpoint for chat responses with LangSmith tracing."""
     try:
         data = request.get_json()
 
@@ -450,7 +494,7 @@ def chat_respond():
             raise BadRequest('Missing message in request')
 
         query = data['message'].strip()
-        session_id = data.get('session_id', f'default_{int(time.time())}')
+        session_id = data.get('session_id', f'flask_session_{int(time.time())}_{str(uuid.uuid4())[:8]}')
 
         if not query:
             raise BadRequest('Empty message')
@@ -469,7 +513,7 @@ def chat_respond():
 
         async def run_query():
             response_content = ""
-            async for event_json in research_agent.stream_query_direct(query, conversation_history):
+            async for event_json in research_agent.stream_query_direct(query, conversation_history, session_id):
                 try:
                     event = json.loads(event_json.strip())
                     if event.get("type") == "final":
@@ -483,7 +527,8 @@ def chat_respond():
 
         return jsonify({
             "success": True,
-            "response_content": response_content
+            "response_content": response_content,
+            "session_id": session_id
         })
 
     except BadRequest as e:
@@ -553,6 +598,43 @@ def clear_memory():
         }), 500
 
 
+# New endpoint for LangSmith run information
+@app.route('/chat/langsmith-info/<run_id>')
+def get_langsmith_info(run_id):
+    """Get LangSmith run information for debugging."""
+    try:
+        if not research_agent.langsmith_client:
+            return jsonify({
+                'success': False,
+                'error': 'LangSmith not configured'
+            }), 400
+        
+        # Get run information from LangSmith
+        run_info = research_agent.langsmith_client.read_run(run_id)
+        
+        return jsonify({
+            'success': True,
+            'run_info': {
+                'id': run_info.id,
+                'name': run_info.name,
+                'start_time': run_info.start_time.isoformat() if run_info.start_time else None,
+                'end_time': run_info.end_time.isoformat() if run_info.end_time else None,
+                'status': run_info.status,
+                'inputs': run_info.inputs,
+                'outputs': run_info.outputs,
+                'error': run_info.error,
+                'tags': run_info.tags,
+                'extra': run_info.extra
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     # Load environment variables if available
     try:
@@ -577,6 +659,7 @@ if __name__ == '__main__':
     print(f"🚀 Starting Local Research Agent Server on port {port}")
     print(f"🌐 Access the application at: http://localhost:{port}")
     print(f"🔧 Debug mode: {debug_mode}")
+    print(f"📊 LangSmith configured: {research_agent.langsmith_client is not None}")
     
     app.run(
         host='localhost',  # localhost for local development
