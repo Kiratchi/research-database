@@ -207,14 +207,14 @@ class AgentManager:
         return None
     
     def _execute_workflow_safe(self, query: str, conversation_history: List, session_id: str) -> str:
-        """Execute the research workflow with improved async safety."""
+        """Execute the research workflow with standard async handling."""
         if not self.research_agent:
             raise Exception("Research agent not available")
         
         print(f"🔬 Executing workflow for: '{query}'")
         print(f"📝 Context: {len(conversation_history)} previous messages")
         
-        # Create new event loop to avoid interference
+        # Create new event loop for clean execution
         loop = None
         try:
             # Try to get existing loop
@@ -228,105 +228,75 @@ class AgentManager:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        async def run_workflow_with_timeout():
-            """Run workflow with timeout and proper error handling."""
+        async def run_workflow_streaming():
+            """Process streaming events naturally without fighting GeneratorExit."""
             response_content = ""
             event_count = 0
             
-            try:
-                # Set a reasonable timeout
-                async with asyncio.timeout(120):  # 2 minute timeout
-                    async for event_data in self.research_agent.stream_query(query, conversation_history):
-                        event_count += 1
-                        
-                        # Handle dict events (most common format)
-                        if isinstance(event_data, dict):
-                            # Look for final response in various possible locations
-                            for node_name, node_data in event_data.items():
-                                if node_name == "__end__" and isinstance(node_data, dict):
-                                    if "response" in node_data:
-                                        response_content = node_data["response"]
-                                        print(f"✅ Found final response in __end__ node")
-                                        break
-                                elif node_name == "complete" and isinstance(node_data, dict):
-                                    if "response" in node_data:
-                                        response_content = node_data["response"]
-                                        print(f"✅ Found final response in complete node")
-                                        break
-                                elif node_name == "replan" and isinstance(node_data, dict):
-                                    if "final_response" in node_data:
-                                        response_content = node_data["final_response"]
-                                        print(f"✅ Found final response in replan node")
-                                        break
-                                elif node_name == "error" and isinstance(node_data, dict):
-                                    error_msg = node_data.get("error", "Unknown error")
-                                    print(f"❌ Error event received: {error_msg}")
-                                    response_content = f"Error during research: {error_msg}"
-                                    break
-                            
-                            # If we found a response, break the loop
-                            if response_content:
-                                break
-                        
-                        # Handle string event data (legacy format)
-                        elif isinstance(event_data, str):
-                            try:
-                                if event_data.strip():
-                                    event = json.loads(event_data.strip())
-                                    if event.get("type") == "final":
-                                        response_content = event.get("content", {}).get("response", "")
-                                        if response_content:
-                                            print(f"✅ Workflow completed after {event_count} events")
-                                            break
-                            except json.JSONDecodeError:
-                                continue
-                    
-                    if not response_content:
-                        print(f"⚠️ No final response after {event_count} events")
-                        response_content = "Research completed but no response generated."
-                    
-                    return response_content
-                    
-            except asyncio.TimeoutError:
-                print(f"⏰ Workflow timeout after {event_count} events")
-                return "Research timed out. Please try a simpler query."
-            except Exception as e:
-                print(f"❌ Workflow error: {e}")
-                import traceback
-                print(f"❌ Full traceback: {traceback.format_exc()}")
-                return f"Error during research: {str(e)}"
+            # STANDARD PATTERN - Let GeneratorExit propagate naturally
+            async for event_data in self.research_agent.stream_query(query, conversation_history):
+                event_count += 1
+                
+                # Process events normally - no timeout or GeneratorExit handling needed
+                if isinstance(event_data, dict):
+                    # Look for final response in various possible locations
+                    for node_name, node_data in event_data.items():
+                        if node_name == "__end__" and isinstance(node_data, dict):
+                            if "response" in node_data:
+                                response_content = node_data["response"]
+                                print(f"✅ Found final response in __end__ node")
+                                return response_content
+                        elif node_name == "complete" and isinstance(node_data, dict):
+                            if "response" in node_data:
+                                response_content = node_data["response"]
+                                print(f"✅ Found final response in complete node")
+                                return response_content
+                        elif node_name == "replan" and isinstance(node_data, dict):
+                            if "final_response" in node_data:
+                                response_content = node_data["final_response"]
+                                print(f"✅ Found final response in replan node")
+                                return response_content
+                        elif node_name == "error" and isinstance(node_data, dict):
+                            error_msg = node_data.get("error", "Unknown error")
+                            print(f"❌ Error event received: {error_msg}")
+                            return f"Error during research: {error_msg}"
+                
+                # Handle string event data (legacy format)
+                elif isinstance(event_data, str):
+                    try:
+                        if event_data.strip():
+                            event = json.loads(event_data.strip())
+                            if event.get("type") == "final":
+                                response_content = event.get("content", {}).get("response", "")
+                                if response_content:
+                                    print(f"✅ Workflow completed after {event_count} events")
+                                    return response_content
+                    except json.JSONDecodeError:
+                        continue
+            
+            # If we get here, the stream ended naturally
+            if not response_content:
+                print(f"⚠️ Stream ended naturally after {event_count} events")
+                response_content = "Research completed but no response generated."
+            
+            return response_content
         
         try:
-            # Run the workflow with proper cleanup
-            result = loop.run_until_complete(run_workflow_with_timeout())
-            
-            # Give any remaining tasks time to complete
-            pending_tasks = asyncio.all_tasks(loop)
-            if pending_tasks:
-                print(f"🧹 Cleaning up {len(pending_tasks)} pending tasks")
-                try:
-                    loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
-                except Exception as e:
-                    print(f"⚠️ Task cleanup warning: {e}")
-            
+            # Run the workflow - GeneratorExit will be handled naturally by LangGraph
+            result = loop.run_until_complete(run_workflow_streaming())
             return result
             
         except Exception as e:
             print(f"❌ Event loop error: {e}")
             return f"Error running workflow: {str(e)}"
         finally:
-            # Properly close the event loop
+            # Clean event loop shutdown
             try:
                 if loop and not loop.is_closed():
-                    # Cancel any remaining tasks
+                    # Wait for any remaining tasks to complete
                     pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    
                     if pending:
-                        # Wait for cancelled tasks to finish
                         loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    
                     loop.close()
                     print("🧹 Event loop properly closed")
             except Exception as e:

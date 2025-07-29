@@ -371,7 +371,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
 
     def should_continue_or_end(state: PlanExecuteState) -> Literal["replan", "complete", "__end__"]:
         """
-        Decide whether to continue, replan, or end.
+        Decide whether to continue, replan, or end - with replan limit.
         """
         plan = state.get("plan", [])
         past_steps = state.get("past_steps", [])
@@ -381,9 +381,9 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             print("✅ COMPLETE: Final response available")
             return "complete"
         
-        # Limit the number of replanning cycles to prevent infinite loops
-        if len(past_steps) >= 5:  # Max 5 steps
-            print("✅ COMPLETE: Maximum steps reached")
+        # FIXED: Limit replanning cycles to prevent timeout
+        if len(past_steps) >= 3:  # Max 3 steps total
+            print("✅ COMPLETE: Maximum steps reached (preventing timeout)")
             return "complete"
         
         # Complete if we've done all planned steps
@@ -391,7 +391,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             print("✅ COMPLETE: All plan steps executed")
             return "complete"
         
-        # Always replan for now - can be made smarter later
+        # Replan for more steps (but limited by above)
         print("🔄 REPLAN: Continuing with replanning")
         return "replan"
 
@@ -518,7 +518,7 @@ class ResearchAgent:
         )
 
     async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None) -> Any:
-        """Stream query with improved error handling."""
+        """Standard LangGraph streaming - let GeneratorExit propagate naturally."""
         
         session_id = str(uuid.uuid4())
         self._compile_agent(session_id)
@@ -547,16 +547,7 @@ class ResearchAgent:
             "tags": ["research_agent", "streaming", f"session_{session_id}"]
         }
         
-        try:
-            async for event in self.app.astream(initial_state, config=config):
-                yield event
-        except Exception as e:
-            print(f"❌ Error in stream_query: {e}")
-            # Yield error event
-            yield {"error": {"error": str(e)}}
-        finally:
-            # Ensure proper cleanup
-            try:
-                await asyncio.sleep(0.1)  # Give any pending tasks time to complete
-            except:
-                pass
+        # STANDARD LANGGRAPH WAY - No try/except GeneratorExit needed
+        async for event in self.app.astream(initial_state, config=config):
+            yield event
+        # GeneratorExit will propagate naturally - this is expected behavior
