@@ -1,6 +1,5 @@
 """
 Research Publications Agent
-
 A LangChain-based plan-and-execute agent for querying research publications
 using Elasticsearch with natural language processing capabilities.
 """
@@ -10,16 +9,16 @@ __author__ = "Research Agent Team"
 
 from .core.state import PlanExecuteState
 from .core.models import Plan, Response, Act
-from .agents.planner import create_planner
-from .agents.executor import create_executor
+from .core.workflow import ResearchAgent, run_research_query, compile_research_agent
 from .tools.elasticsearch_tools import create_elasticsearch_tools
 
 __all__ = [
     "PlanExecuteState",
-    "Plan",
-    "Response", 
+    "Plan", 
+    "Response",
     "Act",
-    "create_planner",
-    "create_executor",
+    "ResearchAgent",
+    "run_research_query", 
+    "compile_research_agent",
     "create_elasticsearch_tools",
 ]
