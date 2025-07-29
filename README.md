@@ -1,273 +1,285 @@
 # Research Publications Chat Agent
 
-A production-ready research agent system for querying publication databases using Elasticsearch, with LangGraph-based plan-and-execute workflows and interactive Streamlit interface.
+An intelligent conversational AI system for exploring and analyzing research publications from Chalmers University of Technology's research database ([chalmers.research.se](https://chalmers.research.se)).
 
-## 🎯 **Project Overview**
+## 🎯 Overview
 
-This project provides an AI-powered research agent that enables natural language querying of publication databases. Built on LangGraph's plan-and-execute pattern, it combines powerful Elasticsearch tools with modern AI agents to deliver an intuitive research experience.
+This project provides a natural language interface to search, analyze, and explore academic publications, enabling researchers and students to easily discover information about:
 
-### **Key Features**
-- 🔍 **Natural Language Queries**: Ask questions in plain English
-- 🤖 **AI-Powered Planning**: LangGraph-based agents create and execute research plans
-- 📊 **Interactive UI**: Streamlit-based chat interface with streaming responses
-- 🔧 **Production-Ready**: Comprehensive error handling and debugging tools
-- 🚀 **Performance Optimized**: Sub-2-second first response times
-- 🌐 **Unicode Support**: Full international character support
-- 📈 **Real-time Updates**: Streaming execution with step-by-step progress
+- **Authors and researchers** - Find publications, research areas, and collaboration patterns
+- **Research topics** - Discover papers, trends, and developments in specific fields  
+- **Publication statistics** - Get counts, trends, and analytical insights
+- **Institutional research** - Explore Chalmers' research output and impact
 
-## Architecture
+## ✨ Key Features
 
-### Current Implementation
+### 🧠 **Intelligent Query Processing**
+- **Natural Language Understanding** - Ask questions in plain English
+- **Context-Aware Conversations** - Follow-up questions remember previous context
+- **Multi-Turn Interactions** - Build complex queries through conversation
+
+### 🔍 **Advanced Research Capabilities**
+- **Author Analysis** - Comprehensive profiles including publications, trends, and collaborations
+- **Topic Exploration** - Deep dives into research fields and themes
+- **Statistical Insights** - Publication counts, temporal trends, and distributions
+- **Smart Search** - Handles ambiguous queries and provides relevant suggestions
+
+### 🛠️ **Research Tools Integration**
+- **Publication Search** - Find papers by title, topic, or keywords
+- **Author Lookup** - Search by researcher names with fuzzy matching
+- **Statistical Analysis** - Field distributions, publication trends, and metrics
+- **Detail Retrieval** - Full publication metadata and abstracts
+
+### 🎨 **User Experience**
+- **Web Interface** - Clean, responsive chat-style interface
+- **Real-time Processing** - Live feedback during research operations
+- **Session Memory** - Maintains conversation context across queries
+- **Error Handling** - Graceful handling of edge cases and limitations
+
+## 🏗️ Architecture
+
+### **Core Components**
+
 ```
-User Query → LangGraph Workflow → Plan Generation → Tool Execution → Response
-                                        ↓
-Streamlit UI ← Response Formatting ← Result Processing ← Elasticsearch Tools
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Web Frontend  │────│  Flask Server    │────│  Agent Manager  │
+│   (HTML/JS)     │    │  (HTTP API)      │    │  (Coordinator)  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                         │
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │ Memory Manager   │    │ Research Agent  │
+                       │ (Conversation)   │    │ (LangGraph)     │
+                       └──────────────────┘    └─────────────────┘
+                                                         │
+                                              ┌─────────────────┐
+                                              │ Elasticsearch   │
+                                              │ (Publications)  │
+                                              └─────────────────┘
 ```
 
-### Core Components
+### **Technology Stack**
 
-- **`src/research_agent/core/workflow.py`**: LangGraph plan-and-execute workflow
-- **`src/research_agent/tools/elasticsearch_tools.py`**: Elasticsearch search tools
-- **`src/research_agent/core/models.py`**: Pydantic models for structured output
-- **`streamlit_agent.py`**: Bridge between Streamlit and research agent
-- **`streamlit_app.py`**: Chat interface with streaming updates
+- **Backend Framework**: Flask with async support
+- **AI Orchestration**: LangGraph for complex workflow management
+- **Language Models**: Claude (Anthropic) via LiteLLM proxy
+- **Database**: Elasticsearch with Chalmers research publications
+- **Memory Management**: LangChain conversation buffers
+- **Monitoring**: LangSmith for tracing and debugging
+- **Frontend**: Vanilla HTML/CSS/JavaScript with modern UI
 
-## Quick Start
+## 🚀 Getting Started
 
-### 1. Setup Environment
+### **Prerequisites**
 
-```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+- Python 3.11+
+- Access to Elasticsearch database
+- LiteLLM proxy setup with Claude models
+- Environment variables configured
 
-# Install dependencies
-pip install -r requirements.txt
-```
+### **Installation**
 
-### 2. Configure Environment Variables
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd db_chat
+   ```
 
-Create a `.env` file in the project root:
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configurations
+   ```
+
+### **Environment Configuration**
+
+Create a `.env` file with the following variables:
 
 ```env
 # Elasticsearch Configuration
 ES_HOST=your-elasticsearch-host
-ES_USER=your-username
+ES_USER=your-username  
 ES_PASS=your-password
 
-# LiteLLM Configuration (for LLM access)
-LITELLM_API_KEY=your-api-key
-LITELLM_BASE_URL=https://your-litellm-endpoint
+# LiteLLM Configuration
+LITELLM_API_KEY=your-litellm-api-key
+LITELLM_BASE_URL=https://your-litellm-proxy.com/v1
+
+# LangSmith Tracing (Optional)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your-langsmith-api-key
+LANGCHAIN_PROJECT=research-publications-agent
+
+# Flask Configuration
+FLASK_HOST=localhost
+FLASK_PORT=5000
+FLASK_DEBUG=true
 ```
 
-### 3. Run the Application
+### **Running the Application**
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Run Streamlit app
-streamlit run streamlit_app.py
+python app.py
 ```
 
-The application will open in your browser at `http://localhost:8501`
+Visit `http://localhost:5000` to access the web interface.
 
-## Available Tools
+## 💡 Usage Examples
 
-The research agent has access to these Elasticsearch tools:
-
-1. **`search_publications`**: Full-text search across Title, Abstract, Persons.PersonData.DisplayName, and Keywords fields
-2. **`search_by_author`**: Search publications by author name in Persons.PersonData.DisplayName field (exact, partial, fuzzy strategies)
-3. **`get_field_statistics`**: Get statistics for specific fields (Year, Persons.PersonData.DisplayName, Source, PublicationType)
-4. **`get_publication_details`**: Get detailed information about a publication using its ID
-5. **`get_database_summary`**: Get overview of database contents with totals and statistics
-
-## Test Questions
-
-Try these example queries to test the agent:
-
-### Author Searches
-- "How many publications has `<author_name>` published?"
-- "List all publications by `<author_name>`"
-- "What is the ORCID of `<author_name>`?"
-
-### Topic Searches
-- "Find publications about `<topic>` from `<year>`"
-- "Find publications containing the keyword `<keyword>`"
-
-### Statistical Queries
-- "What is the total number of publications in the database?"
-- "What are the most common publication types?"
-- "Which years have the most publications?"
-
-### Comparative Analysis
-- "Compare publication counts between `<author1>` and `<author2>`"
-
-## Current Status
-
-### ✅ **Working Features**
-- **Plan-and-Execute Workflow**: LangGraph-based multi-step planning and execution
-- **Streaming Chat Interface**: Real-time updates with step-by-step progress
-- **Elasticsearch Integration**: Proper field mapping and search functionality
-- **Error Handling**: Comprehensive error recovery and debugging tools
-- **Clean Response Formatting**: User-friendly output instead of raw JSON
-- **Tool Documentation**: Enhanced agent knowledge of available tools
-
-### ⚠️ **Known Limitations**
-- **Single-Message Only**: No conversation memory between messages
-- **No Pagination**: Limited to 10 results per tool call
-- **Premature Completion**: Agent sometimes completes tasks before fully addressing user requests
-- **No ORCID Extraction**: Publication details don't contain ORCID information
-
-### 🔧 **Recent Improvements**
-- **Fixed Workflow Routing**: Removed forced replan cycles, agent now completes tasks efficiently
-- **Enhanced Output Formatting**: Users see clean answers instead of raw state objects
-- **Corrected Field Names**: Updated search tools to use actual Elasticsearch schema
-- **Better Tool Descriptions**: Added parameter specifications and output format details
-
-## Technical Implementation
-
-### LangGraph Workflow
-
-The agent uses a sophisticated plan-and-execute pattern:
-
-1. **Planning**: Generate multi-step research plan
-2. **Execution**: Execute tools and gather results
-3. **Completion Detection**: Determine when task is complete
-4. **Response Formatting**: Format results for user presentation
-
-### Elasticsearch Schema
-
-The system works with the following field structure:
-- **Authors**: `Persons.PersonData.DisplayName` (not `authors`)
-- **Journal**: `Source` (not `journal`)
-- **Type**: `PublicationType` (not `publication_type`)
-- **Year**: `Year`
-- **Title**: `Title`
-- **Abstract**: `Abstract`
-
-### Tool Integration
-
-Each tool provides:
-- **Parameter specifications**: Clear input requirements
-- **Output format**: JSON structure documentation
-- **Error handling**: Graceful failure modes
-
-## Development
-
-### Project Structure
+### **Basic Queries**
 ```
-es_workspace/
-├── src/research_agent/           # Core research agent
-│   ├── core/                     # Workflow and models
-│   │   ├── workflow.py           # LangGraph plan-and-execute
-│   │   ├── models.py             # Pydantic models
-│   │   └── state.py              # State management
-│   ├── tools/                    # Elasticsearch tools
-│   │   └── elasticsearch_tools.py
-│   └── agents/                   # Legacy agent components
-├── streamlit_app.py              # Main Streamlit application
-├── streamlit_agent.py            # Streamlit-agent bridge
-├── tests/                        # Test files
-│   ├── test_workflow_routing.py  # Workflow tests
-│   ├── test_fixed_search_tools.py # Tool tests
-│   └── test_pydantic_fix.py      # Model tests
-├── docs/                         # Documentation
-├── examples/                     # Example notebooks
-├── bin/                          # Deprecated files
-└── requirements.txt              # Dependencies
+"Who is Per-Olof Arnäs?"
+"How many papers has Maria Andersson published?"
+"Find papers about machine learning"
 ```
 
-### Running Tests
+### **Advanced Analysis**
+```
+"Show me the publication trends for artificial intelligence research at Chalmers"
+"Who are the most cited authors in sustainable technology?"
+"Compare the research output between different departments"
+```
 
+### **Follow-up Conversations**
+```
+User: "Who is John Smith?"
+Agent: [Provides author information]
+User: "Show me his most recent papers"
+Agent: [Shows recent publications with context]
+User: "What about his collaborations?"
+Agent: [Analyzes collaboration patterns]
+```
+
+## 🔧 API Endpoints
+
+### **Chat Interface**
+- `POST /chat/respond` - Process user queries
+- `POST /chat/clear-memory` - Clear conversation history
+- `GET /chat/session-info/<session_id>` - Get session information
+
+### **System Management**
+- `GET /status` - System status and health
+- `GET /health` - Detailed health check
+- `GET /admin/memory-stats` - Memory usage statistics
+
+## ⚙️ Configuration
+
+### **Model Configuration**
+The system uses Claude models through LiteLLM:
+- **Main LLM**: `claude-sonnet-4` (for complex reasoning)
+- **Replanner**: `claude-haiku-3.5` (for quick decisions)
+
+### **Memory Settings**
+- **Type**: Buffer window memory
+- **Capacity**: Last 10 messages (5 Q&A pairs)
+- **Cleanup**: Automatic cleanup after 1 hour of inactivity
+
+### **Tool Limitations**
+- **search_publications**: Max 15 results per call
+- **search_by_author**: Max 20 results per call  
+- **get_publication_details**: High context usage, use sparingly
+- **Statistical tools**: No limits (aggregation-based)
+
+## 🧪 Testing
+
+### **Memory Inspection**
 ```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Test specific components
-python -m pytest tests/test_workflow_routing.py -v
-python -m pytest tests/test_fixed_search_tools.py -v
-
-# Test search tools functionality
-python tests/test_anna_dubois_search.py
+python check_models.py  # Check available LiteLLM models
+curl http://localhost:5000/admin/memory-stats  # Check memory usage
 ```
 
-### Debug Mode
+### **Streaming Test**
+```bash
+python streaming_test.py server  # Test streaming capabilities
+```
 
-Enable debug mode in the Streamlit app to see:
-- Raw event streams from LangGraph
-- Tool execution details
-- Error tracebacks
-- System status information
+## 📁 Project Structure
 
-## Troubleshooting
+```
+db_chat/
+├── app.py                      # Flask application entry point
+├── check_models.py            # LiteLLM model inspection utility
+├── streaming_test.py          # Streaming capabilities test
+├── index.html                 # Web frontend interface
+├── requirements.txt           # Python dependencies
+├── .env.example              # Environment variables template
+├── research_agent/
+│   ├── core/
+│   │   ├── agent_manager.py   # Main coordinator
+│   │   ├── memory_manager.py  # Conversation memory
+│   │   ├── workflow.py        # LangGraph research workflow
+│   │   ├── state.py          # State management
+│   │   ├── models.py         # Pydantic models
+│   │   └── prompt_loader.py  # Prompt management
+│   ├── tools/
+│   │   └── elasticsearch_tools.py  # Database tools
+│   ├── prompts/
+│   │   ├── batched_planning_prompt.txt
+│   │   ├── memory_aware_execution_prompt.txt
+│   │   ├── executor_prompt.txt
+│   │   └── replanner_prompt.txt
+│   └── utils/
+│       ├── config.py         # Configuration utilities
+│       └── logging.py        # Logging setup
+```
 
-### Common Issues
+## 🛡️ Production Considerations
 
-1. **Connection Error**: Check your `.env` file and Elasticsearch credentials
-2. **LiteLLM Error**: Verify `LITELLM_API_KEY` and `LITELLM_BASE_URL`
-3. **Import Error**: Ensure all dependencies are installed in the virtual environment
-4. **Tool Errors**: Check the debug panel for detailed error information
-5. **Empty Results**: Verify field names match Elasticsearch schema
+### **Proxy Setup**
+Ensure your proxy server supports streaming:
+```nginx
+# Nginx configuration for streaming
+proxy_buffering off;
+proxy_cache off;
+proxy_read_timeout 300s;
+```
 
-### Debug Information
+### **Security**
+- Environment variables for sensitive data
+- No hardcoded credentials
+- Session isolation
+- Input validation
 
-The Streamlit app provides comprehensive debug information:
-- Event stream processing details
-- Tool execution results and timing
-- Error tracebacks with context
-- Agent state and workflow progress
+### **Performance**
+- Connection pooling for Elasticsearch
+- Memory cleanup for long-running sessions
+- Efficient tool selection based on query type
+- Caching for repeated statistical queries
 
-## Implementation History
+## 🐛 Troubleshooting
 
-### Major Milestones
-- **Initial Implementation**: LangGraph plan-and-execute workflow
-- **Elasticsearch Integration**: Connected search tools with proper schema
-- **Streamlit Interface**: Interactive chat with streaming updates
-- **Workflow Fixes**: Corrected routing and completion logic
-- **Tool Enhancement**: Updated descriptions and field mappings
+### **Common Issues**
 
-### Key Fixes Applied
-1. **Workflow Routing**: Removed forced replan cycles
-2. **Output Formatting**: Clean user responses instead of raw JSON
-3. **Field Mapping**: Corrected Elasticsearch field names
-4. **Tool Documentation**: Enhanced agent knowledge of capabilities
-5. **Async/Sync Issues**: Fixed LiteLLM compatibility
+**LiteLLM Model Errors**
+```bash
+python check_models.py  # Verify available models
+```
 
-## Future Enhancements
+**Memory Issues**
+```bash
+curl http://localhost:5000/admin/memory-stats  # Check memory usage
+```
 
-### Short-term (Next Version)
-1. **Conversation Memory**: Support for multi-turn conversations
-2. **Pagination Support**: Handle large result sets effectively
-3. **ORCID Integration**: Extract author identifiers from publications
-4. **Better Completion Logic**: More accurate task completion detection
+**Elasticsearch Connection**
+```bash
+curl http://localhost:5000/health  # Check system health
+```
 
-### Medium-term
-1. **Advanced Search Features**: More sophisticated query capabilities
-2. **Result Export**: Save conversations and research results
-3. **Performance Optimization**: Caching and query optimization
-4. **Enhanced Error Recovery**: Better handling of edge cases
+**Streaming Problems**
+```bash
+python streaming_test.py  # Test proxy streaming support
+```
 
-### Long-term
-1. **Multi-database Support**: Extend beyond Elasticsearch
-2. **Advanced Analytics**: Visualization and trend analysis
-3. **API Interface**: REST API for programmatic access
-4. **User Management**: Authentication and session persistence
+### **Debug Mode**
+Enable detailed logging by setting `FLASK_DEBUG=true` in your environment.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## License
-
-This project is for research and educational purposes.
-
----
-
-**Current Status**: ✅ **Production-Ready MVP with Enhanced Tool Integration**  
-**Repository**: https://github.com/wikefjol/db_chat.git  
-**Last Updated**: Recent tool documentation and workflow routing improvements
