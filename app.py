@@ -1,16 +1,17 @@
 """
-Updated Flask Application - properly disables sessions and removes deprecated functionality
+Updated Flask Application - Using standard LangGraph implementation
 """
 
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+# UPDATED IMPORT - Use standard implementation with original names
 from research_agent.core.agent_manager import AgentManager
 
 
 def create_app():
-    """Create and configure Flask app."""
+    """Create and configure Flask app with standard LangGraph implementation."""
     app = Flask(__name__)
     
     # Properly disable Flask sessions entirely
@@ -21,7 +22,7 @@ def create_app():
     # Enable CORS
     CORS(app)
     
-    # Initialize the agent manager (handles all business logic)
+    # Initialize the agent manager (now uses standard implementation)
     agent_manager = AgentManager()
     
     @app.route('/')
@@ -32,7 +33,7 @@ def create_app():
                 with open('index.html', 'r', encoding='utf-8') as f:
                     return f.read()
             else:
-                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p>'
+                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p><p><strong>Powered by Standard LangGraph Plan-and-Execute</strong></p>'
         except Exception as e:
             return f'<h1>Error</h1><p>{str(e)}</p>'
 
@@ -55,7 +56,7 @@ def create_app():
 
     @app.route('/chat/respond', methods=['POST'])
     def chat_respond():
-        """Handle chat requests with automatic memory management."""
+        """Handle chat requests with standard LangGraph processing."""
         try:
             data = request.get_json()
             
@@ -74,7 +75,7 @@ def create_app():
                     "error": "Empty message"
                 }), 400
 
-            # AgentManager handles everything: processing + memory management
+            # Agent manager handles everything
             result = agent_manager.process_query(query, session_id)
             
             if result['success']:
@@ -83,19 +84,22 @@ def create_app():
                     "response_content": result['response'],
                     "session_id": result['session_id'],
                     "execution_time": result.get('execution_time', 0),
-                    "response_type": result.get('response_type', 'unknown')
+                    "response_type": result.get('response_type', 'unknown'),
+                    "agent_type": result.get('agent_type', 'standard_langgraph')
                 })
             else:
                 return jsonify({
                     "success": False,
                     "error": result['error'],
-                    "session_id": result.get('session_id')
+                    "session_id": result.get('session_id'),
+                    "agent_type": result.get('agent_type', 'standard_langgraph')
                 }), 500
                 
         except Exception as e:
             return jsonify({
                 "success": False, 
-                "error": f"Server error: {str(e)}"
+                "error": f"Server error: {str(e)}",
+                "agent_type": "standard_langgraph"
             }), 500
 
     @app.route('/chat/clear-memory', methods=['POST'])
@@ -108,7 +112,8 @@ def create_app():
             if not session_id:
                 return jsonify({
                     "success": False,
-                    "error": "session_id required"
+                    "error": "session_id required",
+                    "agent_type": "standard_langgraph"
                 }), 400
             
             result = agent_manager.clear_memory(session_id)
@@ -121,7 +126,8 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "success": False,
-                "error": f"Error: {str(e)}"
+                "error": f"Error: {str(e)}",
+                "agent_type": "standard_langgraph"
             }), 500
 
     @app.route('/chat/session-info/<session_id>')
@@ -138,7 +144,8 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "success": False,
-                "error": f"Error: {str(e)}"
+                "error": f"Error: {str(e)}",
+                "agent_type": "standard_langgraph"
             }), 500
 
     @app.route('/admin/memory-stats')
@@ -149,7 +156,20 @@ def create_app():
             return jsonify(stats)
         except Exception as e:
             return jsonify({
-                "error": f"Error: {str(e)}"
+                "error": f"Error: {str(e)}",
+                "agent_type": "standard_langgraph"
+            }), 500
+
+    @app.route('/admin/tools-info')
+    def tools_info():
+        """Get detailed information about available tools."""
+        try:
+            info = agent_manager.get_tools_info()
+            return jsonify(info)
+        except Exception as e:
+            return jsonify({
+                "error": f"Error: {str(e)}",
+                "agent_type": "standard_langgraph"
             }), 500
 
     # Error handlers
@@ -157,14 +177,16 @@ def create_app():
     def not_found(error):
         return jsonify({
             "success": False,
-            "error": "Endpoint not found"
+            "error": "Endpoint not found",
+            "agent_type": "standard_langgraph"
         }), 404
 
     @app.errorhandler(500)
     def internal_error(error):
         return jsonify({
             "success": False,
-            "error": "Internal server error"
+            "error": "Internal server error",
+            "agent_type": "standard_langgraph"
         }), 500
 
     return app
@@ -190,10 +212,12 @@ if __name__ == '__main__':
         port = int(os.getenv('FLASK_PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
         
-        print(f"🚀 Starting Research Agent Server")
+        print(f"🚀 Starting Research Agent Server (Standard LangGraph)")
         print(f"🌐 URL: http://{host}:{port}")
         print(f"🔧 Debug: {debug}")
         print(f"📝 Sessions: Fully disabled")
+        print(f"⚡ Architecture: Standard LangGraph Plan-and-Execute")
+        print(f"🛠️ Based on: https://langchain-ai.github.io/langgraph/tutorials/plan-and-execute/")
         
         app.run(host=host, port=port, debug=debug, use_reloader=False)
         

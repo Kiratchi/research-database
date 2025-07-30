@@ -1,0 +1,21 @@
+Semantic Search: "What research is being done on [specific topic] at Chalmers?"
+Tests: Topic understanding, cross-departmental search, relevance ranking
+
+
+Entity Resolution: "Who are the leading researchers in [field]?"
+Tests: Authority ranking, field classification, researcher disambiguation
+
+Temporal Filtering: "What are the most recent publications from [department]?"
+Tests: Time-based queries, departmental filtering, recency ranking
+
+Network Analysis: "Which researchers collaborate most internationally?"
+Tests: Co-authorship analysis, geographic data extraction, relationship mapping
+
+Cross-Domain Matching: "Find potential thesis supervisors for [specific research topic]"
+Tests: Expertise matching, recent activity weighting, recommendation logic
+
+Structured Filtering: "Show me EU-funded projects in [department]"
+Tests: Multi-attribute filtering (funder + organization), structured data queries
+
+Similarity Matching: "What current research is similar to [research area]?"
+Tests: Semantic similarity, ongoing vs. completed project distinction, relevance scoring
