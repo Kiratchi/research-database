@@ -27,7 +27,7 @@ from langsmith import Client
 # Import tools, memory, and smart methodology logger
 from ..tools import get_all_tools
 from .memory_manager import IntegratedMemoryManager
-from .methodology_logger import SmartMethodologyLogger
+from .methodology_logger import StandardMethodologyLogger
 
 # UPDATED: Import prompts from top-level prompts directory
 from ..prompts import (
@@ -153,7 +153,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     print("🧠 SMART METHODOLOGY workflow: Integrated memory initialized")
     
     # ENHANCED: Initialize smart methodology logger
-    smart_logger = SmartMethodologyLogger()
+    standard_logger = StandardMethodologyLogger()
     print("🧠 Smart Methodology Learning system active with LLM analysis")
     
     # CRITICAL FIX: Create LLMs WITHOUT callback handlers
@@ -207,7 +207,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                     previous_context = f"Previous query: {prev_user_messages[-1].get('content', '')}\nPrevious response: {prev_ai_messages[-1].get('content', '')[:300]}"
             
             # SMART LOGGING: Intelligent query analysis
-            smart_logger.log_query_start(
+            standard_logger.log_query_start(
                 memory_session_id, query, is_followup, previous_context
             )
             
@@ -307,7 +307,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             # SMART LOGGING: Intelligent tool effectiveness analysis
             success = len(response_content) > 100 and "error" not in response_content.lower()
             
-            smart_logger.log_tool_usage(
+            standard_logger.log_tool_usage(
                 memory_session_id,
                 "research_agent",  # Could be more specific about which tools were used
                 task,
@@ -337,7 +337,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             task = plan[0] if plan else "unknown_task"
             
             # SMART LOGGING: Log tool failure
-            smart_logger.log_tool_usage(
+            standard_logger.log_tool_usage(
                 memory_session_id,
                 "research_agent",
                 task,
@@ -430,7 +430,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 comprehensive_data = integrated_memory.get_comprehensive_final_response_data(memory_session_id)
                 full_results = "\n\n".join(comprehensive_data.get('full_results', []))  # ✅ ALL results
                 
-                smart_logger.log_session_complete(
+                standard_logger.log_session_complete(
                     memory_session_id,
                     state["input"],
                     len(past_steps),
@@ -441,27 +441,8 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 )
                 
                 # CLEANED: Create comprehensive final response with NO truncation or technical footers
-                if comprehensive_data['full_results']:
-                    enhanced_response = f"""{response.response}
-
-## 📊 Complete Research Analysis
-
-"""
-                    
-                    # CLEANED: Show ALL research steps with COMPLETE content
-                    for i, full_result in enumerate(comprehensive_data['full_results'], 1):
-                        enhanced_response += f"""### Research Step {i} Results:
-{full_result}
-
-"""
-                    
-                    # REMOVED: Technical footer completely - clean user experience
-                    
-                else:
-                    # Simple fallback for edge case with no research results
-                    enhanced_response = response.response
+                enhanced_response = response.response
                 
-                print("✅ SMART METHODOLOGY replanner: Providing final response with LLM analysis")
                 return {"response": enhanced_response}
             else:
                 # SMART LOGGING: Intelligent replanning analysis
@@ -479,7 +460,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 previous_approach = f"Plan with {len(original_plan)} steps: {', '.join(original_plan[:2])}{'...' if len(original_plan) > 2 else ''}"
                 new_approach = f"Revised plan with {len(response.steps or [])} steps: {', '.join((response.steps or [])[:2])}{'...' if len(response.steps or []) > 2 else ''}"
                 
-                smart_logger.log_replanning_event(
+                standard_logger.log_replanning_event(
                     memory_session_id,
                     state["input"],
                     len(past_steps) + 1,
@@ -516,7 +497,6 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
         """Simple decision function for workflow routing."""
         if state.get("response"):
-            print("✅ SMART METHODOLOGY: Final response available - ending workflow")
             return "__end__"
         else:
             print("🔄 SMART METHODOLOGY: Continuing to agent execution")
@@ -655,7 +635,6 @@ class ResearchAgent:
             print("🚀 Starting SMART METHODOLOGY stream with LLM analysis")
             async for event in self.app.astream(initial_state, config=config):
                 yield event
-            print("✅ SMART METHODOLOGY stream completed with learning insights")
         except Exception as e:
             print(f"❌ Error in SMART METHODOLOGY streaming: {e}")
             yield {"error": {"error": str(e)}}
@@ -669,7 +648,7 @@ if __name__ == "__main__":
     except ImportError:
         pass
     
-    print("✅ SMART METHODOLOGY workflow loaded successfully!")
+
     print("🧠 Key features:")
     print("  - LLM-powered query analysis and categorization")
     print("  - Intelligent tool effectiveness assessment")

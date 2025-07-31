@@ -1,32 +1,25 @@
 """
-Smart Methodology Learning System - LLM-powered analysis
-AI observes and intelligently analyzes patterns using LLM reasoning
-SMART: Uses LLM calls for dynamic categorization and insights
+Standard Methodology Logger - Fast logging without LLM calls
+Captures structured metrics and patterns for analysis without LLM overhead
+FAST: No LLM calls during execution - only structured data logging
 """
 import json
 import os
+import time
+import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import uuid
-from langchain_litellm import ChatLiteLLM
-from langchain_core.prompts import ChatPromptTemplate
+from collections import defaultdict
 
-class SmartMethodologyLogger:
-    """LLM-powered methodology logger with intelligent analysis in human-readable JSON format."""
+class StandardMethodologyLogger:
+    """Fast methodology logger with structured metrics - no LLM calls during execution."""
     
     def __init__(self, log_file: str = "methodology_observations.json"):
         self.log_file = log_file
         self.observations_data = self._load_existing_data()
         
-        # Initialize LLM for analysis
-        self.analysis_llm = ChatLiteLLM(
-            model="anthropic/claude-haiku-3.5",  # Fast and cheap for analysis
-            api_key=os.getenv("LITELLM_API_KEY"),
-            api_base=os.getenv("LITELLM_BASE_URL"),
-            temperature=0.1  # Low temperature for consistent analysis
-        )
-        
-        print(f"📋 Smart Methodology Logger initialized with LLM analysis: {log_file}")
+        print(f"⚡ Standard Methodology Logger initialized (no LLM overhead): {log_file}")
     
     def _load_existing_data(self) -> Dict[str, List]:
         """Load existing observations data or create new structure."""
@@ -34,7 +27,7 @@ class SmartMethodologyLogger:
             try:
                 with open(self.log_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    print(f"📖 Loaded existing observations: {sum(len(v) for v in data.values())} total")
+                    print(f"📖 Loaded existing observations: {sum(len(v) for v in data.values() if isinstance(v, list))} total")
                     return data
             except Exception as e:
                 print(f"⚠️ Error loading existing data: {e}")
@@ -43,9 +36,10 @@ class SmartMethodologyLogger:
         new_data = {
             "metadata": {
                 "created_at": datetime.now().isoformat(),
-                "description": "Smart Methodology Learning Log - LLM-Powered Analysis",
-                "version": "1.0",
-                "total_observations": 0
+                "description": "Standard Methodology Log - Fast Structured Metrics",
+                "version": "2.0",
+                "total_observations": 0,
+                "logger_type": "standard_fast"
             },
             "query_starts": [],
             "tool_usages": [],
@@ -53,36 +47,45 @@ class SmartMethodologyLogger:
             "session_completions": [],
             "followup_analyses": []
         }
-        print(f"📁 Created new methodology observations structure")
+        print(f"📁 Created new standard methodology structure")
         return new_data
     
     def log_query_start(self, session_id: str, query: str, is_followup: bool = False, 
                        previous_context: str = ""):
-        """Log query start with LLM-powered classification and analysis."""
+        """Log query start with fast heuristic analysis."""
         
-        # Use LLM to classify and analyze the query
-        analysis = self._analyze_query_with_llm(query, is_followup, previous_context)
+        # Fast heuristic analysis (no LLM calls)
+        query_analysis = self._analyze_query_fast(query, is_followup, previous_context)
         
         observation = {
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
             "query": query,
+            "query_length": len(query),
             "is_followup": is_followup,
-            "llm_analysis": analysis,
             "has_previous_context": bool(previous_context),
-            "context_preview": previous_context[:200] if previous_context else ""
+            "context_length": len(previous_context),
+            
+            # Fast heuristic analysis
+            "heuristic_analysis": query_analysis,
+            
+            # Raw metrics for later analysis
+            "word_count": len(query.split()),
+            "question_marks": query.count('?'),
+            "contains_numbers": bool(re.search(r'\d', query)),
+            "contains_quotes": '"' in query or "'" in query
         }
         
         self.observations_data["query_starts"].append(observation)
         self._save_data()
-        print(f"📝 Logged query start with LLM analysis: {query[:50]}... (type: {analysis.get('query_type', 'unknown')})")
+        print(f"📝 Logged query start: {query[:50]}... (type: {query_analysis['query_type']})")
     
     def log_tool_usage(self, session_id: str, tool_name: str, tool_input: str, 
                       success: bool, result_content: str = "", notes: str = ""):
-        """Log tool usage with LLM-powered effectiveness analysis."""
+        """Log tool usage with fast effectiveness metrics."""
         
-        # Use LLM to analyze tool effectiveness
-        effectiveness_analysis = self._analyze_tool_effectiveness_with_llm(
+        # Fast effectiveness analysis (no LLM calls)
+        effectiveness_metrics = self._analyze_tool_effectiveness_fast(
             tool_name, tool_input, success, result_content, notes
         )
         
@@ -90,52 +93,67 @@ class SmartMethodologyLogger:
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
             "tool_name": tool_name,
-            "tool_input": tool_input[:500],  # Truncate long inputs
+            "tool_input_length": len(tool_input),
             "success": success,
+            "result_length": len(result_content),
+            "has_notes": bool(notes),
+            
+            # Fast effectiveness metrics
+            "effectiveness_metrics": effectiveness_metrics,
+            
+            # Raw data for analysis
+            "tool_input_preview": tool_input[:200],
             "result_preview": result_content[:300] if result_content else "",
-            "notes": notes,
-            "llm_effectiveness_analysis": effectiveness_analysis
+            "notes": notes[:200] if notes else ""
         }
         
         self.observations_data["tool_usages"].append(observation)
         self._save_data()
-        quality = effectiveness_analysis.get('quality_assessment', 'unknown')
-        print(f"🔧 Logged tool usage with LLM analysis: {tool_name} -> {quality}")
+        quality = effectiveness_metrics['quality_score']
+        print(f"🔧 Logged tool usage: {tool_name} -> {quality}")
     
     def log_replanning_event(self, session_id: str, query: str, step_number: int,
                            reason: str, previous_approach: str, new_approach: str,
                            research_context: str = ""):
-        """Log replanning with LLM-powered failure analysis."""
+        """Log replanning with fast failure pattern analysis."""
         
-        # Use LLM to analyze why replanning was needed and predict improvement
-        replanning_analysis = self._analyze_replanning_with_llm(
+        # Fast replanning analysis (no LLM calls)
+        replanning_metrics = self._analyze_replanning_fast(
             query, reason, previous_approach, new_approach, research_context
         )
         
         observation = {
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
-            "query": query,
+            "query_length": len(query),
             "step_number": step_number,
-            "reason": reason,
-            "previous_approach": previous_approach,
-            "new_approach": new_approach,
-            "research_context_preview": research_context[:500] if research_context else "",
-            "llm_replanning_analysis": replanning_analysis
+            "reason_length": len(reason),
+            "context_available": bool(research_context),
+            "context_length": len(research_context),
+            
+            # Fast replanning metrics
+            "replanning_metrics": replanning_metrics,
+            
+            # Raw data for analysis
+            "query": query,
+            "reason": reason[:300],
+            "previous_approach": previous_approach[:200],
+            "new_approach": new_approach[:200],
+            "research_context_preview": research_context[:300] if research_context else ""
         }
         
         self.observations_data["replanning_events"].append(observation)
         self._save_data()
-        failure_type = replanning_analysis.get('failure_category', 'unknown')
-        print(f"🔄 Logged replanning with LLM analysis: {failure_type}")
+        failure_type = replanning_metrics['failure_category']
+        print(f"🔄 Logged replanning: {failure_type}")
     
     def log_session_complete(self, session_id: str, query: str, total_steps: int,
                            replanning_count: int, final_success: str, 
                            execution_time: float, full_research_results: str = ""):
-        """Log session completion with comprehensive LLM analysis."""
+        """Log session completion with fast performance metrics."""
         
-        # Use LLM to analyze the complete session and extract insights
-        session_analysis = self._analyze_complete_session_with_llm(
+        # Fast session analysis (no LLM calls)
+        session_metrics = self._analyze_session_fast(
             query, total_steps, replanning_count, final_success, 
             execution_time, full_research_results
         )
@@ -143,296 +161,292 @@ class SmartMethodologyLogger:
         observation = {
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
-            "query": query,
+            "query_length": len(query),
             "execution_summary": {
                 "total_steps": total_steps,
                 "replanning_count": replanning_count,
                 "execution_time_seconds": execution_time,
                 "final_success": final_success,
+                "results_length": len(full_research_results),
+                "steps_per_minute": (total_steps / (execution_time / 60)) if execution_time > 0 else 0
             },
-            "results_preview": full_research_results[:500] if full_research_results else "",
-            "llm_session_analysis": session_analysis
+            
+            # Fast session metrics
+            "session_metrics": session_metrics,
+            
+            # Raw data for analysis
+            "query": query,
+            "results_preview": full_research_results[:500] if full_research_results else ""
         }
         
         self.observations_data["session_completions"].append(observation)
         self._save_data()
-        complexity = session_analysis.get('complexity_assessment', 'unknown')
-        print(f"🎯 Logged session complete with LLM analysis: {final_success} ({complexity} complexity)")
+        efficiency = session_metrics['efficiency_category']
+        print(f"🎯 Logged session complete: {final_success} ({efficiency} efficiency)")
     
     def log_followup_analysis(self, session_id: str, original_query: str, 
                             followup_query: str, context_usage_notes: str = "",
                             efficiency_observations: str = ""):
-        """Log follow-up analysis with LLM-powered context effectiveness assessment."""
+        """Log follow-up analysis with fast context effectiveness metrics."""
         
-        # Use LLM to analyze follow-up effectiveness
-        followup_analysis = self._analyze_followup_with_llm(
+        # Fast followup analysis (no LLM calls)
+        followup_metrics = self._analyze_followup_fast(
             original_query, followup_query, context_usage_notes, efficiency_observations
         )
         
         observation = {
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
+            "original_query_length": len(original_query),
+            "followup_query_length": len(followup_query),
+            "has_context_notes": bool(context_usage_notes),
+            "has_efficiency_notes": bool(efficiency_observations),
+            
+            # Fast followup metrics
+            "followup_metrics": followup_metrics,
+            
+            # Raw data for analysis
             "original_query": original_query,
             "followup_query": followup_query,
-            "context_usage_notes": context_usage_notes,
-            "efficiency_observations": efficiency_observations,
-            "llm_followup_analysis": followup_analysis
+            "context_usage_notes": context_usage_notes[:300],
+            "efficiency_observations": efficiency_observations[:300]
         }
         
         self.observations_data["followup_analyses"].append(observation)
         self._save_data()
-        effectiveness = followup_analysis.get('context_effectiveness', 'unknown')
-        print(f"🔗 Logged followup with LLM analysis: {effectiveness} context usage")
+        effectiveness = followup_metrics['context_effectiveness']
+        print(f"🔗 Logged followup: {effectiveness} context effectiveness")
     
-    def _analyze_query_with_llm(self, query: str, is_followup: bool, previous_context: str) -> Dict[str, Any]:
-        """Use LLM to classify and analyze the query."""
-        
-        prompt = ChatPromptTemplate.from_template("""
-Analyze this research query and provide structured insights:
-
-Query: "{query}"
-Is Follow-up: {is_followup}
-Previous Context: {previous_context}
-
-Provide analysis in this JSON format:
-{{
-    "query_type": "one of: author_lookup, geographic_search, topic_search, collaboration_search, temporal_search, publication_search, comparative_analysis, or other",
-    "complexity_level": "simple, moderate, complex, or very_complex",
-    "expected_challenges": ["list", "of", "potential", "challenges"],
-    "suggested_approach": "brief strategy suggestion",
-    "followup_insights": "analysis of how this relates to previous query (if applicable)",
-    "success_predictors": ["factors", "that", "indicate", "likely", "success"],
-    "key_entities": ["important", "entities", "mentioned"]
-}}
-
-Be specific and insightful. Focus on practical methodology insights.
-""")
-        
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                query=query,
-                is_followup=is_followup,
-                previous_context=previous_context[:300] if previous_context else "None"
-            ))
-            
-            # Parse JSON response
-            analysis = json.loads(response.content)
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM query analysis failed: {e}")
-            return {
-                "query_type": "analysis_failed",
-                "error": str(e),
-                "complexity_level": "unknown"
-            }
+    # =============================================================================
+    # FAST HEURISTIC ANALYSIS METHODS (NO LLM CALLS)
+    # =============================================================================
     
-    def _analyze_tool_effectiveness_with_llm(self, tool_name: str, tool_input: str, 
-                                           success: bool, result_content: str, notes: str) -> Dict[str, Any]:
-        """Use LLM to analyze tool effectiveness."""
+    def _analyze_query_fast(self, query: str, is_followup: bool, previous_context: str) -> Dict[str, Any]:
+        """Fast query analysis using heuristics instead of LLM."""
         
-        prompt = ChatPromptTemplate.from_template("""
-Analyze this tool usage for effectiveness and insights:
-
-Tool: {tool_name}
-Input: {tool_input}
-Success: {success}
-Result Preview: {result_content}
-Notes: {notes}
-
-Provide analysis in this JSON format:
-{{
-    "quality_assessment": "excellent, good, adequate, poor, or failed",
-    "effectiveness_score": "0.0 to 1.0",
-    "strengths": ["what", "worked", "well"],
-    "weaknesses": ["what", "didn't", "work"],
-    "improvement_suggestions": ["specific", "suggestions"],
-    "input_optimization": "how to optimize inputs for this tool",
-    "alternative_tools": ["better", "tools", "for", "this", "task"],
-    "reusability": "high, medium, or low - how reusable is this approach"
-}}
-
-Be specific about what made this tool usage effective or ineffective.
-""")
+        query_lower = query.lower()
         
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                tool_name=tool_name,
-                tool_input=tool_input[:200],
-                success=success,
-                result_content=result_content[:300] if result_content else "No result content",
-                notes=notes or "No notes"
-            ))
-            
-            analysis = json.loads(response.content)
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM tool analysis failed: {e}")
-            return {
-                "quality_assessment": "analysis_failed",
-                "error": str(e),
-                "effectiveness_score": "0.0"
-            }
+        # Determine query type based on keywords
+        query_type = "other"
+        if any(word in query_lower for word in ["who is", "author", "researcher", "professor"]):
+            query_type = "author_lookup"
+        elif any(word in query_lower for word in ["country", "sweden", "german", "university"]):
+            query_type = "geographic_search"
+        elif any(word in query_lower for word in ["topic", "field", "research area", "about"]):
+            query_type = "topic_search"
+        elif any(word in query_lower for word in ["collaborate", "work with", "team"]):
+            query_type = "collaboration_search"
+        elif any(word in query_lower for word in ["recent", "latest", "2023", "2024", "current"]):
+            query_type = "temporal_search"
+        elif any(word in query_lower for word in ["publication", "paper", "article", "journal"]):
+            query_type = "publication_search"
+        elif any(word in query_lower for word in ["compare", "versus", "difference", "between"]):
+            query_type = "comparative_analysis"
+        
+        # Determine complexity based on length and structure
+        complexity_level = "simple"
+        if len(query.split()) > 15:
+            complexity_level = "complex"
+        elif len(query.split()) > 8:
+            complexity_level = "moderate"
+        
+        # Predict challenges based on patterns
+        challenges = []
+        if len(query.split()) > 20:
+            challenges.append("very_long_query")
+        if query.count('?') > 1:
+            challenges.append("multiple_questions")
+        if '"' in query:
+            challenges.append("specific_phrases")
+        if not is_followup and len(query.split()) < 3:
+            challenges.append("too_vague")
+        
+        return {
+            "query_type": query_type,
+            "complexity_level": complexity_level,
+            "expected_challenges": challenges,
+            "is_specific": len([w for w in query.split() if w.isupper()]) > 0,  # Has proper nouns
+            "has_temporal_elements": any(word in query_lower for word in ["when", "recent", "2023", "2024", "latest"]),
+            "followup_context_available": is_followup and bool(previous_context)
+        }
     
-    def _analyze_replanning_with_llm(self, query: str, reason: str, previous_approach: str, 
-                                   new_approach: str, research_context: str) -> Dict[str, Any]:
-        """Use LLM to analyze replanning decisions."""
+    def _analyze_tool_effectiveness_fast(self, tool_name: str, tool_input: str, 
+                                       success: bool, result_content: str, notes: str) -> Dict[str, Any]:
+        """Fast tool effectiveness analysis using heuristics."""
         
-        prompt = ChatPromptTemplate.from_template("""
-Analyze this replanning event to understand methodology evolution:
-
-Original Query: {query}
-Replanning Reason: {reason}
-Previous Approach: {previous_approach}
-New Approach: {new_approach}
-Research Context: {research_context}
-
-Provide analysis in this JSON format:
-{{
-    "failure_category": "no_results, too_broad, irrelevant_results, tool_error, incomplete_info, or other",
-    "root_cause": "deeper analysis of why the previous approach failed",
-    "approach_improvement": "how the new approach addresses the failure",
-    "success_probability": "0.0 to 1.0 - likelihood new approach will succeed",
-    "lessons_learned": ["key", "insights", "from", "this", "failure"],
-    "prevention_strategies": ["how", "to", "avoid", "this", "failure", "next", "time"],
-    "pattern_recognition": "is this a common failure pattern?",
-    "methodology_insights": ["broader", "insights", "about", "research", "methodology"]
-}}
-
-Focus on extracting actionable insights for improving future research planning.
-""")
+        # Quality score based on success and result length
+        if not success:
+            quality_score = 0.0
+        elif len(result_content) < 100:
+            quality_score = 0.3
+        elif len(result_content) < 500:
+            quality_score = 0.6
+        elif len(result_content) < 2000:
+            quality_score = 0.8
+        else:
+            quality_score = 1.0
         
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                query=query,
-                reason=reason,
-                previous_approach=previous_approach[:200],
-                new_approach=new_approach[:200],
-                research_context=research_context[:400] if research_context else "No context available"
-            ))
-            
-            analysis = json.loads(response.content)
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM replanning analysis failed: {e}")
-            return {
-                "failure_category": "analysis_failed",
-                "error": str(e),
-                "root_cause": "Could not analyze"
-            }
+        # Quality category
+        if quality_score >= 0.8:
+            quality_category = "excellent"
+        elif quality_score >= 0.6:
+            quality_category = "good"
+        elif quality_score >= 0.3:
+            quality_category = "adequate"
+        elif quality_score > 0:
+            quality_category = "poor"
+        else:
+            quality_category = "failed"
+        
+        # Simple effectiveness indicators
+        has_error_indicators = any(word in result_content.lower() for word in ["error", "failed", "not found", "no results"])
+        has_success_indicators = any(word in result_content.lower() for word in ["found", "located", "identified", "discovered"])
+        
+        return {
+            "quality_score": quality_score,
+            "quality_category": quality_category,
+            "input_length": len(tool_input),
+            "output_length": len(result_content),
+            "success": success,
+            "has_error_indicators": has_error_indicators,
+            "has_success_indicators": has_success_indicators,
+            "efficiency_ratio": len(result_content) / len(tool_input) if len(tool_input) > 0 else 0,
+            "tool_type": tool_name.split('_')[0] if '_' in tool_name else tool_name
+        }
     
-    def _analyze_complete_session_with_llm(self, query: str, total_steps: int, replanning_count: int,
-                                         final_success: str, execution_time: float, 
-                                         full_results: str) -> Dict[str, Any]:
-        """Use LLM to analyze complete research session."""
+    def _analyze_replanning_fast(self, query: str, reason: str, previous_approach: str, 
+                               new_approach: str, research_context: str) -> Dict[str, Any]:
+        """Fast replanning analysis using heuristics."""
         
-        prompt = ChatPromptTemplate.from_template("""
-Analyze this complete research session for methodology insights:
-
-Query: {query}
-Total Steps: {total_steps}
-Replanning Events: {replanning_count}
-Final Success: {final_success}
-Execution Time: {execution_time} seconds
-Results Preview: {full_results}
-
-Provide comprehensive analysis in this JSON format:
-{{
-    "complexity_assessment": "simple, moderate, complex, or very_complex",
-    "efficiency_score": "0.0 to 1.0 - how efficiently was this query handled",
-    "methodology_effectiveness": "excellent, good, adequate, poor, or failed",
-    "key_success_factors": ["what", "made", "this", "work"],
-    "improvement_opportunities": ["specific", "ways", "to", "improve"],
-    "optimal_step_count": "estimated optimal number of steps for this query",
-    "reusable_patterns": ["patterns", "that", "could", "apply", "to", "similar", "queries"],
-    "query_archetype": "what type of query pattern this represents",
-    "scaling_insights": ["how", "this", "approach", "would", "scale"],
-    "human_feedback_needed": ["areas", "where", "human", "review", "would", "help"]
-}}
-
-Provide actionable insights for improving research methodology.
-""")
+        reason_lower = reason.lower()
         
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                query=query,
-                total_steps=total_steps,
-                replanning_count=replanning_count,
-                final_success=final_success,
-                execution_time=execution_time,
-                full_results=full_results[:500] if full_results else "No results available"
-            ))
-            
-            analysis = json.loads(response.content)
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM session analysis failed: {e}")
-            return {
-                "complexity_assessment": "analysis_failed",
-                "error": str(e),
-                "methodology_effectiveness": "unknown"
-            }
+        # Categorize failure reason
+        failure_category = "other"
+        if any(word in reason_lower for word in ["no results", "not found", "empty"]):
+            failure_category = "no_results"
+        elif any(word in reason_lower for word in ["too broad", "too many", "generic"]):
+            failure_category = "too_broad"
+        elif any(word in reason_lower for word in ["irrelevant", "wrong", "incorrect"]):
+            failure_category = "irrelevant_results"
+        elif any(word in reason_lower for word in ["error", "failed", "timeout"]):
+            failure_category = "tool_error"
+        elif any(word in reason_lower for word in ["incomplete", "partial", "missing"]):
+            failure_category = "incomplete_info"
+        
+        # Assess improvement potential
+        approach_change_significant = len(set(previous_approach.split()) & set(new_approach.split())) < 0.5 * len(previous_approach.split())
+        
+        return {
+            "failure_category": failure_category,
+            "reason_length": len(reason),
+            "approach_change_significant": approach_change_significant,
+            "context_available": bool(research_context),
+            "context_length": len(research_context),
+            "step_evolution": len(new_approach.split()) - len(previous_approach.split()),
+            "specificity_increase": "specific" in new_approach.lower() and "specific" not in previous_approach.lower()
+        }
     
-    def _analyze_followup_with_llm(self, original_query: str, followup_query: str,
-                                 context_usage_notes: str, efficiency_observations: str) -> Dict[str, Any]:
-        """Use LLM to analyze follow-up question effectiveness."""
+    def _analyze_session_fast(self, query: str, total_steps: int, replanning_count: int,
+                            final_success: str, execution_time: float, full_results: str) -> Dict[str, Any]:
+        """Fast session analysis using heuristics."""
         
-        prompt = ChatPromptTemplate.from_template("""
-Analyze this follow-up question interaction for context effectiveness:
-
-Original Query: {original_query}
-Follow-up Query: {followup_query}
-Context Usage Notes: {context_usage_notes}
-Efficiency Observations: {efficiency_observations}
-
-Provide analysis in this JSON format:
-{{
-    "followup_type": "entity_continuation, expansion_request, temporal_filter, relationship_exploration, or other",
-    "context_relevance": "high, medium, or low",
-    "context_effectiveness": "excellent, good, adequate, poor, or unused",
-    "efficiency_gain": "high, medium, low, or none",
-    "missed_opportunities": ["ways", "context", "could", "have", "been", "used", "better"],
-    "context_optimization": ["suggestions", "for", "better", "context", "usage"],
-    "conversation_flow": "natural, somewhat_natural, or awkward",
-    "user_intent_clarity": "clear, somewhat_clear, or unclear",
-    "memory_system_insights": ["insights", "about", "conversation", "memory", "effectiveness"]
-}}
-
-Focus on how well the system maintained context and enabled efficient follow-up research.
-""")
+        # Efficiency assessment
+        steps_per_minute = (total_steps / (execution_time / 60)) if execution_time > 0 else 0
         
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                original_query=original_query,
-                followup_query=followup_query,
-                context_usage_notes=context_usage_notes or "No notes provided",
-                efficiency_observations=efficiency_observations or "No observations provided"
-            ))
-            
-            analysis = json.loads(response.content)
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM followup analysis failed: {e}")
-            return {
-                "followup_type": "analysis_failed",
-                "error": str(e),
-                "context_effectiveness": "unknown"
-            }
+        if steps_per_minute > 2:
+            efficiency_category = "high"
+        elif steps_per_minute > 1:
+            efficiency_category = "medium"
+        else:
+            efficiency_category = "low"
+        
+        # Success assessment
+        success_score = 0.0
+        if final_success == "success":
+            success_score = 1.0
+        elif final_success == "partial":
+            success_score = 0.5
+        
+        # Complexity assessment based on steps and replanning
+        if total_steps <= 2 and replanning_count == 0:
+            complexity_category = "simple"
+        elif total_steps <= 4 and replanning_count <= 1:
+            complexity_category = "moderate"
+        elif total_steps <= 6 and replanning_count <= 2:
+            complexity_category = "complex"
+        else:
+            complexity_category = "very_complex"
+        
+        return {
+            "efficiency_category": efficiency_category,
+            "steps_per_minute": steps_per_minute,
+            "success_score": success_score,
+            "complexity_category": complexity_category,
+            "replanning_ratio": replanning_count / total_steps if total_steps > 0 else 0,
+            "results_per_step": len(full_results) / total_steps if total_steps > 0 else 0,
+            "execution_efficiency": len(full_results) / execution_time if execution_time > 0 else 0
+        }
+    
+    def _analyze_followup_fast(self, original_query: str, followup_query: str,
+                             context_usage_notes: str, efficiency_observations: str) -> Dict[str, Any]:
+        """Fast follow-up analysis using heuristics."""
+        
+        # Determine followup type based on patterns
+        followup_lower = followup_query.lower()
+        followup_type = "other"
+        
+        if any(word in followup_lower for word in ["more about", "tell me more", "details"]):
+            followup_type = "expansion_request"
+        elif any(word in followup_lower for word in ["recent", "latest", "current", "new"]):
+            followup_type = "temporal_filter"
+        elif any(word in followup_lower for word in ["collaborate", "work with", "colleagues"]):
+            followup_type = "relationship_exploration"
+        elif len(set(original_query.lower().split()) & set(followup_query.lower().split())) > 2:
+            followup_type = "entity_continuation"
+        
+        # Context effectiveness based on notes
+        context_effectiveness = "unused"
+        if context_usage_notes:
+            if any(word in context_usage_notes.lower() for word in ["successfully", "effectively", "good"]):
+                context_effectiveness = "good"
+            elif any(word in context_usage_notes.lower() for word in ["partially", "somewhat"]):
+                context_effectiveness = "adequate"
+            elif any(word in context_usage_notes.lower() for word in ["failed", "poorly", "didn't"]):
+                context_effectiveness = "poor"
+            else:
+                context_effectiveness = "adequate"
+        
+        # Efficiency assessment
+        efficiency_gain = "none"
+        if efficiency_observations and any(word in efficiency_observations.lower() for word in ["faster", "quick", "efficient"]):
+            efficiency_gain = "high"
+        elif efficiency_observations and any(word in efficiency_observations.lower() for word in ["some", "moderate"]):
+            efficiency_gain = "medium"
+        
+        return {
+            "followup_type": followup_type,
+            "context_effectiveness": context_effectiveness,
+            "efficiency_gain": efficiency_gain,
+            "query_similarity": len(set(original_query.lower().split()) & set(followup_query.lower().split())),
+            "length_ratio": len(followup_query) / len(original_query) if len(original_query) > 0 else 0,
+            "has_pronouns": any(word in followup_query.lower() for word in ["he", "she", "they", "it", "this", "that"]),
+            "context_utilization_score": 1.0 if context_effectiveness == "good" else 0.5 if context_effectiveness == "adequate" else 0.0
+        }
+    
+    # =============================================================================
+    # DATA MANAGEMENT AND ANALYSIS
+    # =============================================================================
     
     def _save_data(self):
-        """Save observations data to JSON file with proper formatting."""
+        """Save observations data to JSON file."""
         try:
             # Update metadata
             self.observations_data["metadata"]["last_updated"] = datetime.now().isoformat()
             self.observations_data["metadata"]["total_observations"] = sum(
-                len(v) for k, v in self.observations_data.items() if k != "metadata"
+                len(v) for k, v in self.observations_data.items() if k != "metadata" and isinstance(v, list)
             )
             
-            # Write with nice formatting
+            # Write with formatting
             with open(self.log_file, 'w', encoding='utf-8') as f:
                 json.dump(self.observations_data, f, indent=2, ensure_ascii=False)
                 
@@ -441,16 +455,126 @@ Focus on how well the system maintained context and enabled efficient follow-up 
     
     def get_summary_stats(self) -> Dict[str, Any]:
         """Get summary statistics of logged observations."""
+        metadata = self.observations_data.get("metadata", {})
         return {
-            "total_observations": self.observations_data["metadata"]["total_observations"],
-            "query_starts": len(self.observations_data["query_starts"]),
-            "tool_usages": len(self.observations_data["tool_usages"]),
-            "replanning_events": len(self.observations_data["replanning_events"]),
-            "session_completions": len(self.observations_data["session_completions"]),
-            "followup_analyses": len(self.observations_data["followup_analyses"]),
-            "created_at": self.observations_data["metadata"]["created_at"],
-            "last_updated": self.observations_data["metadata"].get("last_updated", "Never")
+            "total_observations": metadata.get("total_observations", 0),
+            "query_starts": len(self.observations_data.get("query_starts", [])),
+            "tool_usages": len(self.observations_data.get("tool_usages", [])),
+            "replanning_events": len(self.observations_data.get("replanning_events", [])),
+            "session_completions": len(self.observations_data.get("session_completions", [])),
+            "followup_analyses": len(self.observations_data.get("followup_analyses", [])),
+            "created_at": metadata.get("created_at", "Unknown"),
+            "last_updated": metadata.get("last_updated", "Never"),
+            "logger_type": "standard_fast"
         }
+    
+    def get_performance_metrics(self, days: int = 7) -> Dict[str, Any]:
+        """Get performance metrics from recent observations."""
+        recent_sessions = self._get_recent_observations("session_completions", days)
+        recent_tools = self._get_recent_observations("tool_usages", days)
+        recent_queries = self._get_recent_observations("query_starts", days)
+        
+        if not recent_sessions:
+            return {"error": "No recent session data available"}
+        
+        # Calculate metrics
+        success_rate = sum(1 for s in recent_sessions if s.get("execution_summary", {}).get("final_success") == "success") / len(recent_sessions)
+        avg_steps = sum(s.get("execution_summary", {}).get("total_steps", 0) for s in recent_sessions) / len(recent_sessions)
+        avg_time = sum(s.get("execution_summary", {}).get("execution_time_seconds", 0) for s in recent_sessions) / len(recent_sessions)
+        avg_replanning = sum(s.get("execution_summary", {}).get("replanning_count", 0) for s in recent_sessions) / len(recent_sessions)
+        
+        # Tool success rate
+        tool_success_rate = sum(1 for t in recent_tools if t.get("success", False)) / len(recent_tools) if recent_tools else 0
+        
+        # Query complexity distribution
+        query_complexity = defaultdict(int)
+        for q in recent_queries:
+            complexity = q.get("heuristic_analysis", {}).get("complexity_level", "unknown")
+            query_complexity[complexity] += 1
+        
+        return {
+            "period_days": days,
+            "total_sessions": len(recent_sessions),
+            "success_rate": round(success_rate, 3),
+            "average_steps": round(avg_steps, 1),
+            "average_execution_time": round(avg_time, 1),
+            "average_replanning_events": round(avg_replanning, 1),
+            "tool_success_rate": round(tool_success_rate, 3),
+            "query_complexity_distribution": dict(query_complexity),
+            "generated_at": datetime.now().isoformat()
+        }
+    
+    def get_pattern_insights(self, days: int = 7) -> Dict[str, Any]:
+        """Get pattern insights from recent data using heuristic analysis."""
+        recent_data = {
+            "queries": self._get_recent_observations("query_starts", days),
+            "tools": self._get_recent_observations("tool_usages", days),
+            "sessions": self._get_recent_observations("session_completions", days),
+            "replanning": self._get_recent_observations("replanning_events", days)
+        }
+        
+        insights = {
+            "analysis_period": f"{days} days",
+            "total_data_points": sum(len(v) for v in recent_data.values()),
+            "generated_at": datetime.now().isoformat()
+        }
+        
+        # Query type patterns
+        query_types = defaultdict(int)
+        for q in recent_data["queries"]:
+            qtype = q.get("heuristic_analysis", {}).get("query_type", "unknown")
+            query_types[qtype] += 1
+        insights["query_type_patterns"] = dict(query_types)
+        
+        # Tool effectiveness patterns
+        tool_quality = defaultdict(list)
+        for t in recent_data["tools"]:
+            tool_name = t.get("tool_name", "unknown")
+            quality = t.get("effectiveness_metrics", {}).get("quality_score", 0)
+            tool_quality[tool_name].append(quality)
+        
+        tool_avg_quality = {tool: round(sum(scores)/len(scores), 2) for tool, scores in tool_quality.items()}
+        insights["tool_effectiveness_patterns"] = tool_avg_quality
+        
+        # Failure patterns
+        failure_categories = defaultdict(int)
+        for r in recent_data["replanning"]:
+            category = r.get("replanning_metrics", {}).get("failure_category", "unknown")
+            failure_categories[category] += 1
+        insights["failure_patterns"] = dict(failure_categories)
+        
+        # Success patterns
+        complexity_success = defaultdict(lambda: {"total": 0, "success": 0})
+        for s in recent_data["sessions"]:
+            complexity = s.get("session_metrics", {}).get("complexity_category", "unknown")
+            success = s.get("execution_summary", {}).get("final_success", "") == "success"
+            complexity_success[complexity]["total"] += 1
+            if success:
+                complexity_success[complexity]["success"] += 1
+        
+        success_by_complexity = {}
+        for complexity, data in complexity_success.items():
+            if data["total"] > 0:
+                success_by_complexity[complexity] = round(data["success"] / data["total"], 3)
+        insights["success_by_complexity"] = success_by_complexity
+        
+        return insights
+    
+    def _get_recent_observations(self, obs_type: str, days: int) -> List[Dict[str, Any]]:
+        """Get observations from recent days."""
+        cutoff = datetime.now() - timedelta(days=days)
+        observations = self.observations_data.get(obs_type, [])
+        
+        recent = []
+        for obs in observations:
+            try:
+                obs_time = datetime.fromisoformat(obs['timestamp'])
+                if obs_time > cutoff:
+                    recent.append(obs)
+            except (KeyError, ValueError):
+                continue
+        
+        return recent
     
     def get_recent_observations(self, observation_type: str = "all", limit: int = 10) -> List[Dict]:
         """Get recent observations of a specific type."""
@@ -458,173 +582,57 @@ Focus on how well the system maintained context and enabled efficient follow-up 
             # Combine all observations and sort by timestamp
             all_obs = []
             for obs_type, observations in self.observations_data.items():
-                if obs_type != "metadata":
+                if obs_type != "metadata" and isinstance(observations, list):
                     for obs in observations:
                         obs_with_type = obs.copy()
                         obs_with_type["observation_type"] = obs_type
                         all_obs.append(obs_with_type)
             
-            all_obs.sort(key=lambda x: x["timestamp"], reverse=True)
+            all_obs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
             return all_obs[:limit]
         else:
             # Get specific type
             observations = self.observations_data.get(observation_type, [])
-            return sorted(observations, key=lambda x: x["timestamp"], reverse=True)[:limit]
-    
-    def generate_llm_insights_summary(self, days: int = 7) -> Dict[str, Any]:
-        """Use LLM to analyze patterns across multiple observations."""
-        
-        # Load recent observations
-        recent_observations = self._load_recent_observations_from_data(days)
-        
-        if not recent_observations:
-            return {"error": "No recent observations found"}
-        
-        # Prepare summary of observations for LLM analysis
-        obs_summary = self._prepare_observations_summary_from_data(recent_observations)
-        
-        prompt = ChatPromptTemplate.from_template("""
-Analyze these research methodology observations to extract high-level insights:
-
-{observations_summary}
-
-Provide comprehensive analysis in this JSON format:
-{{
-    "overall_patterns": ["major", "patterns", "observed"],
-    "success_patterns": ["what", "consistently", "works", "well"],
-    "failure_patterns": ["what", "consistently", "fails"],
-    "tool_insights": ["insights", "about", "tool", "effectiveness"],
-    "query_type_insights": ["insights", "about", "different", "query", "types"],
-    "efficiency_insights": ["insights", "about", "system", "efficiency"],
-    "followup_insights": ["insights", "about", "followup", "handling"],
-    "improvement_priorities": ["top", "priorities", "for", "improvement"],
-    "methodology_recommendations": ["specific", "methodology", "changes"],
-    "system_evolution": "how the system performance is trending",
-    "human_action_items": ["specific", "actions", "humans", "should", "take"]
-}}
-
-Provide actionable, specific insights that will help improve the research system.
-""")
-        
-        try:
-            response = self.analysis_llm.invoke(prompt.format(
-                observations_summary=obs_summary
-            ))
-            
-            analysis = json.loads(response.content)
-            analysis["analysis_period_days"] = days
-            analysis["total_observations_analyzed"] = len(recent_observations)
-            analysis["generated_at"] = datetime.now().isoformat()
-            
-            return analysis
-            
-        except Exception as e:
-            print(f"⚠️ LLM insights analysis failed: {e}")
-            return {
-                "error": f"LLM analysis failed: {str(e)}",
-                "total_observations_analyzed": len(recent_observations)
-            }
-    
-    def _load_recent_observations_from_data(self, days: int) -> List[Dict[str, Any]]:
-        """Load observations from recent days from the data structure."""
-        cutoff = datetime.now() - timedelta(days=days)
-        recent_obs = []
-        
-        try:
-            for obs_type, observations in self.observations_data.items():
-                if obs_type != "metadata":
-                    for obs in observations:
-                        try:
-                            obs_time = datetime.fromisoformat(obs['timestamp'])
-                            if obs_time > cutoff:
-                                obs_with_type = obs.copy()
-                                obs_with_type["observation_type"] = obs_type
-                                recent_obs.append(obs_with_type)
-                        except (KeyError, ValueError):
-                            continue
-        except Exception as e:
-            print(f"⚠️ Error loading recent observations: {e}")
-        
-        return recent_obs
-    
-    def _prepare_observations_summary_from_data(self, observations: List[Dict[str, Any]]) -> str:
-        """Prepare a summary of observations for LLM analysis from structured data."""
-        summary_parts = []
-        
-        # Group by observation type
-        by_type = {}
-        for obs in observations:
-            obs_type = obs.get('observation_type', 'unknown')
-            if obs_type not in by_type:
-                by_type[obs_type] = []
-            by_type[obs_type].append(obs)
-        
-        # Summarize each type
-        for obs_type, obs_list in by_type.items():
-            summary_parts.append(f"\n{obs_type.upper()} ({len(obs_list)} events):")
-            
-            for i, obs in enumerate(obs_list[:5]):  # Limit to 5 examples per type
-                if obs_type == "query_starts":
-                    llm_analysis = obs.get('llm_analysis', {})
-                    summary_parts.append(f"  Query: {obs.get('query', 'unknown')}")
-                    summary_parts.append(f"    Type: {llm_analysis.get('query_type', 'unknown')}")
-                    summary_parts.append(f"    Complexity: {llm_analysis.get('complexity_level', 'unknown')}")
-                
-                elif obs_type == "tool_usages":
-                    effectiveness = obs.get('llm_effectiveness_analysis', {})
-                    summary_parts.append(f"  Tool: {obs.get('tool_name', 'unknown')}")
-                    summary_parts.append(f"    Quality: {effectiveness.get('quality_assessment', 'unknown')}")
-                    summary_parts.append(f"    Score: {effectiveness.get('effectiveness_score', 'unknown')}")
-                
-                elif obs_type == "session_completions":
-                    session_analysis = obs.get('llm_session_analysis', {})
-                    summary_parts.append(f"  Query: {obs.get('query', 'unknown')}")
-                    summary_parts.append(f"    Efficiency: {session_analysis.get('efficiency_score', 'unknown')}")
-                    summary_parts.append(f"    Complexity: {session_analysis.get('complexity_assessment', 'unknown')}")
-                
-                if i >= 4:  # Limit examples
-                    break
-        
-        return '\n'.join(summary_parts[:2000])  # Limit total length
+            return sorted(observations, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
 
 # Factory function for easy initialization
-def create_smart_methodology_logger(log_file: str = "methodology_observations.json") -> SmartMethodologyLogger:
-    """Create smart methodology logger instance with LLM analysis in JSON format."""
-    return SmartMethodologyLogger(log_file)
+def create_standard_methodology_logger(log_file: str = "methodology_observations.json") -> StandardMethodologyLogger:
+    """Create standard methodology logger instance - fast with no LLM calls."""
+    return StandardMethodologyLogger(log_file)
 
 if __name__ == "__main__":
-    # Test the smart methodology logger with JSON format
-    print("Testing Smart Methodology Logger with LLM Analysis (JSON Format)...")
+    # Test the standard methodology logger
+    print("Testing Standard Methodology Logger (Fast - No LLM calls)...")
     
     try:
-        logger = create_smart_methodology_logger("test_smart_methodology.json")
+        logger = create_standard_methodology_logger("test_standard_methodology.json")
         
-        # Test different types of logging with LLM analysis
-        session_id = "test_session_json_123"
+        # Test different types of logging with fast analysis
+        session_id = "test_session_standard_123"
         
-        # Test query start with LLM analysis
+        # Test query start with fast analysis
         logger.log_query_start(session_id, "Find Swedish researchers in explainable AI", is_followup=False)
         
-        # Test tool usage with LLM analysis
+        # Test tool usage with fast analysis
         logger.log_tool_usage(session_id, "search_authors_by_country", "country:Sweden topic:explainable AI", 
                              success=True, 
                              result_content="Found 23 Swedish researchers working on explainable AI, including researchers from KTH, Chalmers, and Linköping University. Key publications in ICML, NeurIPS, and ICLR conferences.",
                              notes="Geographic search worked well, found comprehensive results")
         
-        # Test replanning with LLM analysis
+        # Test replanning with fast analysis
         logger.log_replanning_event(session_id, "Find Swedish researchers in explainable AI", 2,
                                    "Initial search returned too many general AI researchers, need to focus specifically on explainable AI", 
                                    "Broad AI researcher search in Sweden",
                                    "Specific explainable AI search with Swedish institution filter",
                                    research_context="Previous search found 847 AI researchers in Sweden, but most work on general machine learning rather than explainability specifically.")
         
-        # Test session completion with LLM analysis
+        # Test session completion with fast analysis
         logger.log_session_complete(session_id, "Find Swedish researchers in explainable AI", 
                                    total_steps=3, replanning_count=1,
                                    final_success="success", execution_time=67.5,
                                    full_research_results="Comprehensive analysis of Swedish explainable AI research landscape. Found 23 active researchers across 8 institutions. Key areas include interpretable machine learning, model transparency, and ethical AI. Leading institutions are KTH Royal Institute of Technology and Chalmers University of Technology.")
         
-        # Test follow-up analysis with LLM analysis
+        # Test follow-up analysis with fast analysis
         logger.log_followup_analysis(session_id, "Find Swedish researchers in explainable AI",
                                    "What are the most recent publications from these researchers?",
                                    context_usage_notes="Successfully used previous researcher list to search for recent publications",
@@ -636,23 +644,28 @@ if __name__ == "__main__":
         for key, value in stats.items():
             print(f"  {key}: {value}")
         
-        # Show recent observations
-        recent = logger.get_recent_observations(limit=3)
-        print(f"\n🔍 Recent Observations ({len(recent)}):")
-        for obs in recent:
-            print(f"  {obs['timestamp']}: {obs['observation_type']}")
+        # Show performance metrics
+        performance = logger.get_performance_metrics(days=1)
+        print(f"\n⚡ Performance Metrics:")
+        for key, value in performance.items():
+            print(f"  {key}: {value}")
         
-        print("✅ Smart Methodology Logger with JSON format test completed!")
-        print("📊 Check test_smart_methodology.json for human-readable structured observations")
-        print("🧠 LLM analysis provides dynamic categorization and insights")
-        print("📖 JSON format is much more readable and easier to browse")
-        print("🎯 Ready for integration with your existing workflow!")
+        # Show pattern insights
+        patterns = logger.get_pattern_insights(days=1)
+        print(f"\n🔍 Pattern Insights:")
+        for key, value in patterns.items():
+            print(f"  {key}: {value}")
         
-        # Test LLM insights summary
-        print("\n🔍 Testing LLM insights generation...")
-        insights = logger.generate_llm_insights_summary(days=1)
-        print(f"📈 Generated insights: {len(insights)} categories analyzed")
+        print("✅ Standard Methodology Logger test completed!")
+        print("⚡ Key benefits:")
+        print("  - NO LLM calls during execution (much faster)")
+        print("  - Rich heuristic analysis and pattern detection")
+        print("  - Structured metrics for later analysis")
+        print("  - Performance and efficiency tracking")
+        print("  - Pattern insights without AI overhead")
+        print("🚀 Ready for high-performance production use!")
         
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        print("Make sure LITELLM_API_KEY and LITELLM_BASE_URL are set in your environment")
+        import traceback
+        traceback.print_exc()

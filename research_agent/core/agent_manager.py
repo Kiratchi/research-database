@@ -17,7 +17,7 @@ from elasticsearch import Elasticsearch
 
 from .memory_manager import IntegratedMemoryManager
 from .workflow import ResearchAgent
-from .methodology_logger import SmartMethodologyLogger
+from .methodology_logger import StandardMethodologyLogger
 
 # Import tools
 try:
@@ -55,11 +55,11 @@ class AgentManager:
         
         # ENHANCED: Initialize smart methodology logger
         try:
-            self.smart_logger = SmartMethodologyLogger()
+            self.standard_logger = StandardMethodologyLogger()
             print("🧠 Smart Methodology Logger initialized in AgentManager")
         except Exception as e:
             print(f"⚠️ Smart Methodology Logger initialization failed: {e}")
-            self.smart_logger = None
+            self.standard_logger = None
         
         print("🚀 AgentManager initialized with SMART METHODOLOGY learning and refined async handling!")
     
@@ -221,7 +221,7 @@ class AgentManager:
         """Analyze and log follow-up questions with smart LLM analysis."""
         
         # Only analyze if we have previous conversation and smart logger
-        if len(conversation_history) < 2 or not self.smart_logger:
+        if len(conversation_history) < 2 or not self.standard_logger:
             return
         
         try:
@@ -238,7 +238,7 @@ class AgentManager:
                 efficiency_observations = self._analyze_efficiency_patterns(original_query, query, conversation_history)
                 
                 # SMART LOGGING: LLM-powered follow-up analysis
-                self.smart_logger.log_followup_analysis(
+                self.standard_logger.log_followup_analysis(
                     session_id,
                     original_query,
                     query,
@@ -554,7 +554,7 @@ Just ask me about any researcher or academic field!"""
                 "architecture": "smart_methodology_refined_async_graceful_completion"
             },
             "smart_methodology": {
-                "logger_initialized": self.smart_logger is not None,
+                "logger_initialized": self.standard_logger is not None,
                 "analysis_type": "llm_powered",
                 "learning_active": True,
                 "adaptive_categorization": True,
@@ -566,14 +566,14 @@ Just ask me about any researcher or academic field!"""
     def get_smart_methodology_insights(self, days: int = 7) -> Dict[str, Any]:
         """Get LLM-powered methodology insights for the specified period."""
         try:
-            if not self.smart_logger:
+            if not self.standard_logger:
                 return {
                     "success": False,
                     "error": "Smart methodology logger not initialized",
                     "analysis_type": "llm_powered"
                 }
             
-            insights = self.smart_logger.generate_llm_insights_summary(days)
+            insights = self.standard_logger.generate_llm_insights_summary(days)
             return {
                 "success": True,
                 "insights": insights,
@@ -594,7 +594,7 @@ Just ask me about any researcher or academic field!"""
         
         # Add smart methodology information
         base_stats.update({
-            "smart_methodology_enabled": self.smart_logger is not None,
+            "smart_methodology_enabled": self.standard_logger is not None,
             "analysis_capabilities": [
                 "Query type classification",
                 "Tool effectiveness assessment",
@@ -751,7 +751,7 @@ Just ask me about any researcher or academic field!"""
         
         # Test smart methodology logger
         try:
-            if self.smart_logger:
+            if self.standard_logger:
                 health["checks"]["smart_methodology_logger"] = "healthy (llm_powered)"
             else:
                 health["checks"]["smart_methodology_logger"] = "unavailable"
@@ -807,7 +807,7 @@ if __name__ == "__main__":
     print(f"Simple query result: {result}")
     
     # Test smart methodology insights
-    if manager.smart_logger:
+    if manager.standard_logger:
         insights = manager.get_smart_methodology_insights(days=1)
         print(f"Smart methodology insights: {insights.get('success', False)}")
     
