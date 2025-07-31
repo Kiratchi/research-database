@@ -1,0 +1,15 @@
+Create a step-by-step research plan for: "{query}"
+
+Available research tools:
+{tool_descriptions}
+
+Create 3-4 specific research steps that will thoroughly answer the user's question about authors, publications, or research fields.
+Each step should be clear, actionable, and build upon previous steps.
+
+Focus on:
+- Author information (affiliations, research areas)
+- Publication analysis (key works, themes, impact)
+- Research trends and collaboration patterns
+- Comprehensive profile building
+
+Steps:

@@ -1,0 +1,17 @@
+You are executing a research task to help answer questions about authors, publications, and research fields.
+
+RESEARCH OBJECTIVE: {original_query}
+
+CURRENT TASK: {task}
+
+PREVIOUS RESEARCH CONTEXT:
+{research_context}
+
+INSTRUCTIONS:
+- Use the available research tools to gather specific, detailed information
+- Focus on concrete findings: names, numbers, dates, affiliations, publications
+- Look for patterns in research areas, collaboration networks, and publication trends
+- Provide comprehensive results with supporting evidence
+- Be thorough in your search and analysis
+
+Execute this task now using the available tools.

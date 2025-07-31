@@ -347,107 +347,76 @@ class AgentManager:
 Just ask me about any researcher or academic field!"""
         
         return None
-    
+
     def _execute_smart_methodology_workflow(self, query: str, conversation_history: List, session_id: str) -> str:
         """
-        Execute workflow with SMART METHODOLOGY learning and refined async handling.
-        ENHANCED: Combines refined async execution with LLM-powered methodology analysis.
+        Execute workflow with SMART METHODOLOGY learning and NATURAL async completion.
+        FIXED: Removes aggressive cleanup that causes GeneratorExit in LangSmith.
         """
         if not self.research_agent:
             raise Exception("Research agent not available")
         
-        print(f"🔬 Executing SMART METHODOLOGY + REFINED ASYNC workflow for: '{query}'")
+        print(f"🔬 Executing SMART METHODOLOGY workflow for: '{query}'")
         print(f"📝 Context: {len(conversation_history)} previous messages")
         print(f"🧠 Using smart methodology learning with LLM analysis")
         
-        # REFINED FIX: Use dedicated thread with graceful completion + smart learning
-        def run_with_smart_learning_and_graceful_completion():
-            """Run workflow with smart methodology learning and graceful stream completion."""
+        # FIXED: Natural completion without aggressive cleanup
+        def run_with_natural_completion():
+            """Run workflow with natural stream completion - no forced task cancellation."""
             
             # Create new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             try:
-                print("🧵 Running in isolated thread with smart learning + graceful completion")
+                print("🧵 Running in isolated thread with natural completion")
                 
                 # Run the async workflow and let it complete naturally
                 result = loop.run_until_complete(
                     self._smart_methodology_async_runner(query, conversation_history)
                 )
                 
-                print("✅ Stream completed gracefully with smart methodology insights")
+                print("✅ Stream completed naturally - no forced cleanup")
                 return result
                 
             except Exception as e:
-                print(f"❌ Error in smart methodology + graceful completion thread: {e}")
+                print(f"❌ Error in smart methodology workflow: {e}")
                 return f"Error in smart methodology workflow: {str(e)}"
             
             finally:
-                # REFINED cleanup - only after stream is completely done
+                # FIXED: Minimal cleanup - let LangSmith finish logging
                 try:
-                    print("🧹 Starting refined async cleanup after smart methodology analysis...")
+                    print("🧹 Natural cleanup - letting streams finish...")
                     
-                    # Give the stream a moment to fully complete
+                    # Give LangSmith and streams time to complete naturally
                     try:
-                        loop.run_until_complete(asyncio.sleep(0.1))
+                        loop.run_until_complete(asyncio.sleep(0.5))
                     except:
                         pass
                     
-                    # Get only the tasks that are actually pending (not completed)
-                    all_tasks = asyncio.all_tasks(loop)
-                    truly_pending_tasks = [
-                        task for task in all_tasks 
-                        if not task.done() and not task.cancelled()
-                    ]
+                    # REMOVED: Aggressive task cancellation that caused GeneratorExit
+                    # No more task.cancel() calls that interrupt LangSmith logging
                     
-                    if truly_pending_tasks:
-                        print(f"🔄 Found {len(truly_pending_tasks)} truly pending tasks to clean up")
-                        
-                        # Cancel only truly pending tasks
-                        for task in truly_pending_tasks:
-                            if not task.done():
-                                task.cancel()
-                        
-                        # Wait for cancellation with shorter timeout
-                        async def refined_cleanup():
-                            try:
-                                await asyncio.wait_for(
-                                    asyncio.gather(*truly_pending_tasks, return_exceptions=True),
-                                    timeout=2.0  # Shorter timeout
-                                )
-                                print("✅ Refined cleanup completed with smart methodology")
-                            except asyncio.TimeoutError:
-                                print("⚠️ Refined cleanup timeout (acceptable for some background tasks)")
-                            except Exception as e:
-                                print(f"⚠️ Refined cleanup info: {e}")
-                        
-                        # Run refined cleanup
-                        try:
-                            loop.run_until_complete(refined_cleanup())
-                        except Exception as e:
-                            print(f"⚠️ Refined cleanup completion info: {e}")
-                    else:
-                        print("✅ No pending tasks found - stream completed cleanly with smart learning")
+                    print("✅ Natural cleanup completed - streams finished gracefully")
                     
-                    # Close the loop gracefully
+                    # Close the loop naturally
                     if not loop.is_closed():
                         loop.close()
-                        print("✅ Event loop closed gracefully")
+                        print("✅ Event loop closed naturally")
                     
                 except Exception as cleanup_error:
-                    print(f"⚠️ Refined cleanup info: {cleanup_error}")
-                    # Force close if needed
+                    print(f"⚠️ Cleanup info: {cleanup_error}")
+                    # Gentle close if needed
                     try:
                         if not loop.is_closed():
                             loop.close()
                     except:
                         pass
         
-        # REFINED FIX: Run with longer timeout to allow graceful completion + smart analysis
+        # Run with natural completion
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="SmartMethodologyAsync") as executor:
-                future = executor.submit(run_with_smart_learning_and_graceful_completion)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="SmartMethodologyNatural") as executor:
+                future = executor.submit(run_with_natural_completion)
                 result = future.result(timeout=900)  # 15 minute timeout for complex queries
                 return result
                 
@@ -457,15 +426,16 @@ Just ask me about any researcher or academic field!"""
         except Exception as e:
             print(f"❌ Smart methodology workflow error: {e}")
             return f"Error in smart methodology workflow: {str(e)}"
-    
+
     async def _smart_methodology_async_runner(self, query: str, conversation_history: List) -> str:
         """
-        ENHANCED async runner with smart methodology learning.
-        COMBINES: Refined async execution + LLM-powered analysis.
+        FIXED async runner - consumes stream naturally to prevent GeneratorExit.
+        REMOVES: Early break statements that interrupt the stream generator.
         """
         response_content = ""
         event_count = 0
         memory_session_id = None
+        found_response = False  # Flag to track when we found response
         
         try:
             print("🚀 Starting SMART METHODOLOGY async runner with LLM analysis")
@@ -473,11 +443,11 @@ Just ask me about any researcher or academic field!"""
             # SMART METHODOLOGY: Stream with intelligent analysis
             stream_generator = self.research_agent.stream_query(query, conversation_history)
             
-            # Let the stream complete naturally while capturing methodology insights
+            # FIXED: Consume the ENTIRE stream naturally - no early breaks
             async for event_data in stream_generator:
                 event_count += 1
                 
-                # Process event data normally
+                # Process event data normally (but don't break early)
                 if isinstance(event_data, dict):
                     for node_name, node_data in event_data.items():
                         
@@ -486,32 +456,27 @@ Just ask me about any researcher or academic field!"""
                             memory_session_id = node_data["memory_session_id"]
                             print(f"🔗 Memory session tracked: {memory_session_id}")
                         
-                        # Look for final response
+                        # Look for final response (but don't break!)
                         if node_name == "__end__" and isinstance(node_data, dict):
-                            if "response" in node_data:
+                            if "response" in node_data and not found_response:
                                 response_content = node_data["response"]
+                                found_response = True
                                 print(f"✅ SMART METHODOLOGY: Found final response in __end__ node")
-                                break
+                                # REMOVED: break  # This was causing GeneratorExit!
                         elif node_name == "replan" and isinstance(node_data, dict):
-                            if "response" in node_data:
+                            if "response" in node_data and not found_response:
                                 response_content = node_data["response"]
+                                found_response = True
                                 print(f"✅ SMART METHODOLOGY: Found final response in replan node")
-                                break
+                                # REMOVED: break  # This was causing GeneratorExit!
                 
-                # Break if we found response
-                if response_content:
-                    break
+                # REMOVED: Early break that interrupted stream
+                # The stream will naturally complete when LangGraph is done
             
             print(f"🎯 Smart methodology stream completed naturally with {event_count} events")
             
-            # REFINED: Only do gentle cleanup of the stream generator itself
-            try:
-                # Allow the generator to close naturally
-                if hasattr(stream_generator, 'aclose'):
-                    await stream_generator.aclose()
-                print("✅ Stream generator closed gracefully")
-            except Exception as e:
-                print(f"⚠️ Stream generator close info: {e}")
+            # REMOVED: Manual stream closing - let it close naturally
+            # The async for loop automatically handles proper stream closure
             
             # Handle completion
             if not response_content:
@@ -535,7 +500,7 @@ Just ask me about any researcher or academic field!"""
         except Exception as e:
             print(f"❌ Error in smart methodology async runner: {e}")
             return f"Error in smart methodology workflow: {str(e)}"
-    
+
     def get_status(self) -> Dict[str, Any]:
         """Get system status with smart methodology information."""
         es_connected = False

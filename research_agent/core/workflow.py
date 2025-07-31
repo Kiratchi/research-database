@@ -2,6 +2,9 @@
 COMPLETE Enhanced workflow.py with Smart LLM-Powered Methodology Learning
 BUILDS ON: Your existing minimal callback workflow with LLM-powered learning integration
 ADDS: Smart methodology logging throughout the research process
+CLEANED: Removed redundant conversation context from planning
+REFACTORED: Moved prompts to separate TXT files for better maintainability
+UPDATED: Correct import paths for your project structure
 """
 
 from typing import Dict, Any, List, Optional, Literal
@@ -25,6 +28,13 @@ from langsmith import Client
 from ..tools import get_all_tools
 from .memory_manager import IntegratedMemoryManager
 from .methodology_logger import SmartMethodologyLogger
+
+# UPDATED: Import prompts from top-level prompts directory
+from ..prompts import (
+    PLANNING_PROMPT_TEMPLATE,
+    EXECUTION_PROMPT_TEMPLATE, 
+    REPLANNING_PROMPT_TEMPLATE
+)
 
 # =============================================================================
 # STATE SCHEMA (UNCHANGED)
@@ -122,6 +132,9 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     Create research workflow with SMART LLM-POWERED methodology learning.
     BUILDS ON: Existing minimal callback workflow.
     ADDS: Intelligent methodology observation and analysis throughout.
+    CLEANED: Removed redundant conversation context from planning.
+    REFACTORED: Uses external TXT prompt templates for better maintainability.
+    UPDATED: Correct import paths for your project structure.
     """
     
     # Setup minimal LangSmith (no callbacks)
@@ -173,7 +186,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
     # =============================================================================
     
     def plan_step(state: PlanExecuteState):
-        """Planning step with smart LLM-powered query analysis."""
+        """CLEANED planning step using external TXT prompt template."""
         try:
             query = state["input"]
             conversation_history = state.get("conversation_history", [])
@@ -198,40 +211,14 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 memory_session_id, query, is_followup, previous_context
             )
             
-            # Build conversation context
-            context_str = ""
-            if conversation_history:
-                context_lines = []
-                for msg in conversation_history[-4:]:
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')[:150]
-                    context_lines.append(f"{role.title()}: {content}...")
-                context_str = "\n".join(context_lines)
-            else:
-                context_str = "No previous conversation history."
-            
             # Format tool information
             tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
             
-            # Create planning prompt
-            planning_prompt_text = f"""Create a step-by-step research plan for: "{query}"
-
-Available research tools:
-{tool_descriptions}
-
-Conversation context:
-{context_str}
-
-Create 3-4 specific research steps that will thoroughly answer the user's question about authors, publications, or research fields.
-Each step should be clear, actionable, and build upon previous steps.
-
-Focus on:
-- Author information (affiliations, research areas)
-- Publication analysis (key works, themes, impact)
-- Research trends and collaboration patterns
-- Comprehensive profile building
-
-Steps:"""
+            # REFACTORED: Use external TXT prompt template
+            planning_prompt_text = PLANNING_PROMPT_TEMPLATE.format(
+                query=query,
+                tool_descriptions=tool_descriptions
+            )
             
             # Create planner WITHOUT callbacks
             planner_prompt = ChatPromptTemplate.from_template(planning_prompt_text)
@@ -257,7 +244,7 @@ Steps:"""
             }
     
     def execute_step(state: PlanExecuteState):
-        """Execution step with smart tool effectiveness analysis."""
+        """Execution step using external TXT prompt template."""
         try:
             plan = state["plan"]
             past_steps = state.get("past_steps", [])
@@ -276,24 +263,12 @@ Steps:"""
             research_context = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=5)
             print(f"📋 Research context: {len(research_context):,} chars")
             
-            # Build execution prompt
-            execution_prompt = f"""You are executing a research task to help answer questions about authors, publications, and research fields.
-
-RESEARCH OBJECTIVE: {original_query}
-
-CURRENT TASK: {task}
-
-PREVIOUS RESEARCH CONTEXT:
-{research_context}
-
-INSTRUCTIONS:
-- Use the available research tools to gather specific, detailed information
-- Focus on concrete findings: names, numbers, dates, affiliations, publications
-- Look for patterns in research areas, collaboration networks, and publication trends
-- Provide comprehensive results with supporting evidence
-- Be thorough in your search and analysis
-
-Execute this task now using the available tools."""
+            # REFACTORED: Use external TXT prompt template
+            execution_prompt = EXECUTION_PROMPT_TEMPLATE.format(
+                original_query=original_query,
+                task=task,
+                research_context=research_context
+            )
             
             # CRITICAL FIX: Execute WITHOUT callbacks
             agent_executor = create_react_agent(llm, tools, prompt=execution_prompt)
@@ -380,7 +355,7 @@ Execute this task now using the available tools."""
             return {"past_steps": updated_past_steps}
     
     def replan_step(state: PlanExecuteState):
-        """Replanning step with intelligent session and replanning analysis."""
+        """CLEANED replanning step using external TXT prompt template."""
         try:
             memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
             original_plan = state.get("plan", [])
@@ -409,47 +384,16 @@ Execute this task now using the available tools."""
                 else:
                     research_summary = "No research completed yet."
             
-            # Create replanning prompt
-            replanning_prompt = f"""You are a research replanner with access to COMPLETE research results.
-
-ANALYSIS CONTEXT:
-Original objective: {state["input"]}
-Original plan: {original_plan}
-
-COMPLETE RESEARCH RESULTS:
-{research_summary}
-
-DECISION CRITERIA:
-Based on these COMPLETE research results, decide whether to:
-1. **Provide a final response** (action_type: "response") - if comprehensive information is available
-2. **Continue with more steps** (action_type: "plan") - if critical information is missing
-
-GUIDELINES FOR RESPONSE:
-✅ Provide final response when:
-- User's question has been comprehensively answered with COMPLETE information
-- The research results contain sufficient detail and context
-- No critical information gaps remain in the FULL research content
-- The research objective has been met with rich, detailed findings
-
-GUIDELINES FOR PLAN:
-⚠️ Continue with plan only when:
-- Important aspects of the query remain genuinely unanswered
-- Need specific additional data not present in COMPLETE current research
-- Current FULL results are incomplete for comprehensive answer
-- Missing critical information despite having detailed research content
-
-RESPONSE QUALITY (when providing final response):
-- Lead with direct answer to user's specific question
-- Include relevant statistics, counts, and examples from COMPLETE research
-- Use clear structure with headers and formatting
-- Address all aspects of the original query with full context
-- Mention scope and limitations when relevant
-
-Make your decision based on the COMPLETE research content available:"""
+            # REFACTORED: Use external TXT prompt template
+            replanning_prompt = REPLANNING_PROMPT_TEMPLATE.format(
+                original_objective=state["input"],
+                original_plan=original_plan,
+                research_summary=research_summary
+            )
             
             # Create replanner WITHOUT callbacks
-            replanner_prompt = ChatPromptTemplate.from_template(replanning_prompt)
-            replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
+            replanner_prompt_obj = ChatPromptTemplate.from_template(replanning_prompt)
+            replanner = replanner_prompt_obj | replanner_llm.with_structured_output(Act)
             
             # Minimal config
             config = {
@@ -484,7 +428,7 @@ Make your decision based on the COMPLETE research content available:"""
                 
                 # Get comprehensive research results for LLM analysis
                 comprehensive_data = integrated_memory.get_comprehensive_final_response_data(memory_session_id)
-                full_results = "\n\n".join(comprehensive_data.get('full_results', [])[:2])  # Top 2 results
+                full_results = "\n\n".join(comprehensive_data.get('full_results', []))  # ✅ ALL results
                 
                 smart_logger.log_session_complete(
                     memory_session_id,
@@ -496,7 +440,7 @@ Make your decision based on the COMPLETE research content available:"""
                     full_results
                 )
                 
-                # Create comprehensive final response
+                # CLEANED: Create comprehensive final response with NO truncation or technical footers
                 if comprehensive_data['full_results']:
                     enhanced_response = f"""{response.response}
 
@@ -504,20 +448,18 @@ Make your decision based on the COMPLETE research content available:"""
 
 """
                     
-                    for i, full_result in enumerate(comprehensive_data['full_results'][:2], 1):
-                        result_preview = full_result[:2000] + ("..." if len(full_result) > 2000 else "")
+                    # CLEANED: Show ALL research steps with COMPLETE content
+                    for i, full_result in enumerate(comprehensive_data['full_results'], 1):
                         enhanced_response += f"""### Research Step {i} Results:
-{result_preview}
+{full_result}
 
 """
                     
-                    enhanced_response += f"""---
-*Analysis based on {comprehensive_data['total_steps']} complete research steps with {comprehensive_data['total_content_length']:,} total characters. Smart methodology learning enabled.*"""
+                    # REMOVED: Technical footer completely - clean user experience
+                    
                 else:
-                    enhanced_response = f"""{response.response}
-
----
-*Research completed with {comprehensive_data['total_steps']} comprehensive steps using smart methodology tracking.*"""
+                    # Simple fallback for edge case with no research results
+                    enhanced_response = response.response
                 
                 print("✅ SMART METHODOLOGY replanner: Providing final response with LLM analysis")
                 return {"response": enhanced_response}
@@ -558,20 +500,18 @@ Make your decision based on the COMPLETE research content available:"""
                 fallback_summary = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=2)
                 
                 if fallback_summary != "No research steps completed yet.":
-                    fallback_response = f"""Based on research completed with smart methodology tracking:
+                    # CLEANED: Clean fallback response without technical footer
+                    fallback_response = f"""Based on research completed:
 
-{fallback_summary[:1000]}{"..." if len(fallback_summary) > 1000 else ""}
-
----
-*Research completed successfully. Smart methodology learning enabled.*"""
+{fallback_summary[:1000]}{"..." if len(fallback_summary) > 1000 else ""}"""
                 else:
-                    fallback_response = "Research completed with smart methodology tracking."
+                    fallback_response = "Research completed successfully."
                 
                 return {"response": fallback_response}
                 
             except Exception as fallback_error:
                 print(f"⚠️ Fallback also failed: {fallback_error}")
-                return {"response": f"Research error during replanning: {str(e)}. Smart methodology analysis captured for learning."}
+                return {"response": f"Research error during replanning: {str(e)}. Analysis captured for learning."}
     
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
         """Simple decision function for workflow routing."""
@@ -603,7 +543,7 @@ Make your decision based on the COMPLETE research content available:"""
         ["agent", END]
     )
     
-    print("🧠 SMART METHODOLOGY workflow constructed with LLM-powered learning")
+    print("🧠 SMART METHODOLOGY workflow constructed with LLM-powered learning + external TXT prompts")
     
     return workflow
 
@@ -737,3 +677,7 @@ if __name__ == "__main__":
     print("  - Comprehensive session outcome evaluation")
     print("  - Dynamic pattern recognition and learning")
     print("  - No hard-coded rules - fully adaptive")
+    print("  - CLEANED: No redundant conversation context in planning")
+    print("  - CLEANED: No truncation limits or technical footers")
+    print("  - REFACTORED: External TXT prompt templates for better maintainability")
+    print("  - UPDATED: Correct import paths for your project structure")
