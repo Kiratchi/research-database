@@ -90,9 +90,9 @@ class SmartMethodologyLogger:
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
             "tool_name": tool_name,
-            "tool_input": tool_input[:500],  # Truncate long inputs
+            "tool_input": tool_input[:1000],  # Truncate long inputs
             "success": success,
-            "result_preview": result_content[:300] if result_content else "",
+            "result_preview": result_content[:800] if result_content else "",
             "notes": notes,
             "llm_effectiveness_analysis": effectiveness_analysis
         }
@@ -120,7 +120,7 @@ class SmartMethodologyLogger:
             "reason": reason,
             "previous_approach": previous_approach,
             "new_approach": new_approach,
-            "research_context_preview": research_context[:500] if research_context else "",
+            "research_context_preview": research_context[:1000] if research_context else "",
             "llm_replanning_analysis": replanning_analysis
         }
         
@@ -150,7 +150,7 @@ class SmartMethodologyLogger:
                 "execution_time_seconds": execution_time,
                 "final_success": final_success,
             },
-            "results_preview": full_research_results[:500] if full_research_results else "",
+            "results_preview": full_research_results[:1000] if full_research_results else "",
             "llm_session_analysis": session_analysis
         }
         
@@ -185,18 +185,19 @@ class SmartMethodologyLogger:
         print(f"🔗 Logged followup with LLM analysis: {effectiveness} context usage")
     
     def _analyze_query_with_llm(self, query: str, is_followup: bool, previous_context: str) -> Dict[str, Any]:
-        """Use LLM to classify and analyze the query."""
+        """Use LLM to classify and analyze the query with robust JSON extraction."""
         
         prompt = ChatPromptTemplate.from_template("""
-Analyze this research query and provide structured insights:
+Analyze this research query and provide structured insights.
 
 Query: "{query}"
 Is Follow-up: {is_followup}
 Previous Context: {previous_context}
 
-Provide analysis in this JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no additional text before or after.
+
 {{
-    "query_type": "one of: author_lookup, geographic_search, topic_search, collaboration_search, temporal_search, publication_search, comparative_analysis, or other",
+    "query_type": "one of: expert_recommendation, author_lookup, geographic_search, topic_search, collaboration_search, temporal_search, publication_search, comparative_analysis, interdisciplinary_research, or other",
     "complexity_level": "simple, moderate, complex, or very_complex",
     "expected_challenges": ["list", "of", "potential", "challenges"],
     "suggested_approach": "brief strategy suggestion",
@@ -204,35 +205,29 @@ Provide analysis in this JSON format:
     "success_predictors": ["factors", "that", "indicate", "likely", "success"],
     "key_entities": ["important", "entities", "mentioned"]
 }}
-
-Be specific and insightful. Focus on practical methodology insights.
 """)
         
         try:
             response = self.analysis_llm.invoke(prompt.format(
                 query=query,
                 is_followup=is_followup,
-                previous_context=previous_context[:300] if previous_context else "None"
+                previous_context=previous_context[:800] if previous_context else "None"
             ))
             
-            # Parse JSON response
-            analysis = json.loads(response.content)
+            # Robust JSON extraction
+            analysis = self._extract_json_simple(response.content)
             return analysis
             
         except Exception as e:
             print(f"⚠️ LLM query analysis failed: {e}")
-            return {
-                "query_type": "analysis_failed",
-                "error": str(e),
-                "complexity_level": "unknown"
-            }
+            return self._create_fallback_query_analysis(query, str(e))
     
     def _analyze_tool_effectiveness_with_llm(self, tool_name: str, tool_input: str, 
                                            success: bool, result_content: str, notes: str) -> Dict[str, Any]:
-        """Use LLM to analyze tool effectiveness."""
+        """Use LLM to analyze tool effectiveness with robust JSON extraction."""
         
         prompt = ChatPromptTemplate.from_template("""
-Analyze this tool usage for effectiveness and insights:
+Analyze this tool usage for effectiveness and insights.
 
 Tool: {tool_name}
 Input: {tool_input}
@@ -240,7 +235,8 @@ Success: {success}
 Result Preview: {result_content}
 Notes: {notes}
 
-Provide analysis in this JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no additional text before or after.
+
 {{
     "quality_assessment": "excellent, good, adequate, poor, or failed",
     "effectiveness_score": "0.0 to 1.0",
@@ -251,8 +247,6 @@ Provide analysis in this JSON format:
     "alternative_tools": ["better", "tools", "for", "this", "task"],
     "reusability": "high, medium, or low - how reusable is this approach"
 }}
-
-Be specific about what made this tool usage effective or ineffective.
 """)
         
         try:
@@ -260,27 +254,24 @@ Be specific about what made this tool usage effective or ineffective.
                 tool_name=tool_name,
                 tool_input=tool_input[:200],
                 success=success,
-                result_content=result_content[:300] if result_content else "No result content",
+                result_content=result_content[:800] if result_content else "No result content",
                 notes=notes or "No notes"
             ))
             
-            analysis = json.loads(response.content)
+            # Robust JSON extraction
+            analysis = self._extract_json_simple(response.content)
             return analysis
             
         except Exception as e:
             print(f"⚠️ LLM tool analysis failed: {e}")
-            return {
-                "quality_assessment": "analysis_failed",
-                "error": str(e),
-                "effectiveness_score": "0.0"
-            }
+            return self._create_fallback_tool_analysis(tool_name, success, str(e))
     
     def _analyze_replanning_with_llm(self, query: str, reason: str, previous_approach: str, 
                                    new_approach: str, research_context: str) -> Dict[str, Any]:
-        """Use LLM to analyze replanning decisions."""
+        """Use LLM to analyze replanning decisions with robust JSON extraction."""
         
         prompt = ChatPromptTemplate.from_template("""
-Analyze this replanning event to understand methodology evolution:
+Analyze this replanning event to understand methodology evolution.
 
 Original Query: {query}
 Replanning Reason: {reason}
@@ -288,7 +279,8 @@ Previous Approach: {previous_approach}
 New Approach: {new_approach}
 Research Context: {research_context}
 
-Provide analysis in this JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no additional text before or after.
+
 {{
     "failure_category": "no_results, too_broad, irrelevant_results, tool_error, incomplete_info, or other",
     "root_cause": "deeper analysis of why the previous approach failed",
@@ -299,8 +291,6 @@ Provide analysis in this JSON format:
     "pattern_recognition": "is this a common failure pattern?",
     "methodology_insights": ["broader", "insights", "about", "research", "methodology"]
 }}
-
-Focus on extracting actionable insights for improving future research planning.
 """)
         
         try:
@@ -312,24 +302,21 @@ Focus on extracting actionable insights for improving future research planning.
                 research_context=research_context[:400] if research_context else "No context available"
             ))
             
-            analysis = json.loads(response.content)
+            # Robust JSON extraction
+            analysis = self._extract_json_simple(response.content)
             return analysis
             
         except Exception as e:
             print(f"⚠️ LLM replanning analysis failed: {e}")
-            return {
-                "failure_category": "analysis_failed",
-                "error": str(e),
-                "root_cause": "Could not analyze"
-            }
+            return self._create_fallback_replanning_analysis(reason, str(e))
     
     def _analyze_complete_session_with_llm(self, query: str, total_steps: int, replanning_count: int,
                                          final_success: str, execution_time: float, 
                                          full_results: str) -> Dict[str, Any]:
-        """Use LLM to analyze complete research session."""
+        """Use LLM to analyze complete research session with robust JSON extraction."""
         
         prompt = ChatPromptTemplate.from_template("""
-Analyze this complete research session for methodology insights:
+Analyze this complete research session for methodology insights.
 
 Query: {query}
 Total Steps: {total_steps}
@@ -338,7 +325,8 @@ Final Success: {final_success}
 Execution Time: {execution_time} seconds
 Results Preview: {full_results}
 
-Provide comprehensive analysis in this JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no additional text before or after.
+
 {{
     "complexity_assessment": "simple, moderate, complex, or very_complex",
     "efficiency_score": "0.0 to 1.0 - how efficiently was this query handled",
@@ -351,8 +339,6 @@ Provide comprehensive analysis in this JSON format:
     "scaling_insights": ["how", "this", "approach", "would", "scale"],
     "human_feedback_needed": ["areas", "where", "human", "review", "would", "help"]
 }}
-
-Provide actionable insights for improving research methodology.
 """)
         
         try:
@@ -362,33 +348,31 @@ Provide actionable insights for improving research methodology.
                 replanning_count=replanning_count,
                 final_success=final_success,
                 execution_time=execution_time,
-                full_results=full_results[:500] if full_results else "No results available"
+                full_results=full_results[:1000] if full_results else "No results available"
             ))
             
-            analysis = json.loads(response.content)
+            # Robust JSON extraction
+            analysis = self._extract_json_simple(response.content)
             return analysis
             
         except Exception as e:
             print(f"⚠️ LLM session analysis failed: {e}")
-            return {
-                "complexity_assessment": "analysis_failed",
-                "error": str(e),
-                "methodology_effectiveness": "unknown"
-            }
+            return self._create_fallback_session_analysis(query, final_success, str(e))
     
     def _analyze_followup_with_llm(self, original_query: str, followup_query: str,
                                  context_usage_notes: str, efficiency_observations: str) -> Dict[str, Any]:
-        """Use LLM to analyze follow-up question effectiveness."""
+        """Use LLM to analyze follow-up question effectiveness with robust JSON extraction."""
         
         prompt = ChatPromptTemplate.from_template("""
-Analyze this follow-up question interaction for context effectiveness:
+Analyze this follow-up question interaction for context effectiveness.
 
 Original Query: {original_query}
 Follow-up Query: {followup_query}
 Context Usage Notes: {context_usage_notes}
 Efficiency Observations: {efficiency_observations}
 
-Provide analysis in this JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no additional text before or after.
+
 {{
     "followup_type": "entity_continuation, expansion_request, temporal_filter, relationship_exploration, or other",
     "context_relevance": "high, medium, or low",
@@ -400,8 +384,6 @@ Provide analysis in this JSON format:
     "user_intent_clarity": "clear, somewhat_clear, or unclear",
     "memory_system_insights": ["insights", "about", "conversation", "memory", "effectiveness"]
 }}
-
-Focus on how well the system maintained context and enabled efficient follow-up research.
 """)
         
         try:
@@ -412,16 +394,13 @@ Focus on how well the system maintained context and enabled efficient follow-up 
                 efficiency_observations=efficiency_observations or "No observations provided"
             ))
             
-            analysis = json.loads(response.content)
+            # Robust JSON extraction
+            analysis = self._extract_json_simple(response.content)
             return analysis
             
         except Exception as e:
             print(f"⚠️ LLM followup analysis failed: {e}")
-            return {
-                "followup_type": "analysis_failed",
-                "error": str(e),
-                "context_effectiveness": "unknown"
-            }
+            return self._create_fallback_followup_analysis(followup_query, str(e))
     
     def _save_data(self):
         """Save observations data to JSON file with proper formatting."""
@@ -471,7 +450,143 @@ Focus on how well the system maintained context and enabled efficient follow-up 
             observations = self.observations_data.get(observation_type, [])
             return sorted(observations, key=lambda x: x["timestamp"], reverse=True)[:limit]
     
-    def generate_llm_insights_summary(self, days: int = 7) -> Dict[str, Any]:
+    def _extract_json_simple(self, content: str) -> Dict[str, Any]:
+        """Simple robust JSON extraction with fallback methods."""
+        
+        # Handle completely empty responses
+        if not content or content.strip() == "":
+            raise json.JSONDecodeError("Empty response from LLM", "", 0)
+
+        # Method 1: Try direct JSON parsing first (handles clean responses)
+        content_clean = content.strip()
+        try:
+            return json.loads(content_clean)
+        except json.JSONDecodeError:
+            pass
+        
+        # Method 2: Extract JSON between first { and last } (handles extra text)
+        try:
+            first_brace = content.find('{')
+            last_brace = content.rfind('}')
+            
+            if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                json_content = content[first_brace:last_brace + 1]
+                return json.loads(json_content)
+        except json.JSONDecodeError:
+            pass
+        
+        # Method 3: If all fails, raise error for fallback handling
+        raise json.JSONDecodeError("Could not extract valid JSON from LLM response", content, 0)
+    
+    def _create_fallback_query_analysis(self, query: str, error_msg: str) -> Dict[str, Any]:
+        """Create fallback query analysis using simple pattern matching."""
+        query_lower = query.lower()
+        
+        # Pattern-based classification
+        if any(word in query_lower for word in ['examiner', 'thesis', 'supervisor', 'advisor']):
+            query_type = 'expert_recommendation'
+            complexity = 'complex'
+        elif any(word in query_lower for word in ['who is', 'author', 'researcher']):
+            query_type = 'author_lookup'
+            complexity = 'moderate'
+        elif any(word in query_lower for word in ['swedish', 'norway', 'country', 'geographic']):
+            query_type = 'geographic_search'
+            complexity = 'moderate'
+        elif any(word in query_lower for word in ['publications', 'papers', 'articles']):
+            query_type = 'publication_search'
+            complexity = 'moderate'
+        elif any(word in query_lower for word in ['collaboration', 'collaborate', 'work with']):
+            query_type = 'collaboration_search'
+            complexity = 'complex'
+        else:
+            query_type = 'other'
+            complexity = 'moderate'
+        
+        return {
+            "query_type": query_type,
+            "complexity_level": complexity,
+            "expected_challenges": ["llm_analysis_unavailable"],
+            "suggested_approach": "comprehensive search approach",
+            "success_predictors": ["relevant tools available"],
+            "key_entities": [],
+            "analysis_method": "fallback_pattern_matching",
+            "llm_error": error_msg[:100]  # Truncate error message
+        }
+    
+    def _create_fallback_tool_analysis(self, tool_name: str, success: bool, error_msg: str) -> Dict[str, Any]:
+        """Create fallback tool analysis."""
+        return {
+            "quality_assessment": "good" if success else "failed",
+            "effectiveness_score": "0.7" if success else "0.0",
+            "strengths": ["execution_completed"] if success else [],
+            "weaknesses": ["llm_analysis_unavailable"],
+            "improvement_suggestions": ["enable_detailed_analysis"],
+            "input_optimization": "optimize based on success patterns",
+            "alternative_tools": [],
+            "reusability": "medium",
+            "analysis_method": "fallback_basic",
+            "llm_error": error_msg[:100]
+        }
+    
+    def _create_fallback_replanning_analysis(self, reason: str, error_msg: str) -> Dict[str, Any]:
+        """Create fallback replanning analysis."""
+        return {
+            "failure_category": "other",
+            "root_cause": reason,
+            "approach_improvement": "attempting different strategy",
+            "success_probability": "0.6",
+            "lessons_learned": ["replanning_triggered"],
+            "prevention_strategies": ["improve_initial_planning"],
+            "pattern_recognition": "unknown",
+            "methodology_insights": ["adaptation_capability_demonstrated"],
+            "analysis_method": "fallback_basic",
+            "llm_error": error_msg[:100]
+        }
+    
+    def _create_fallback_session_analysis(self, query: str, final_success: str, error_msg: str) -> Dict[str, Any]:
+        """Create fallback session analysis."""
+        return {
+            "complexity_assessment": "moderate",
+            "efficiency_score": "0.7" if final_success == "success" else "0.3",
+            "methodology_effectiveness": "adequate" if final_success == "success" else "poor",
+            "key_success_factors": ["task_completion"] if final_success == "success" else [],
+            "improvement_opportunities": ["enable_detailed_llm_analysis"],
+            "optimal_step_count": "unknown",
+            "reusable_patterns": ["basic_execution_pattern"],
+            "query_archetype": "general_research",
+            "scaling_insights": ["pattern_analysis_needed"],
+            "human_feedback_needed": ["llm_analysis_setup"],
+            "analysis_method": "fallback_basic",
+            "llm_error": error_msg[:100]
+        }
+    
+    def _create_fallback_followup_analysis(self, followup_query: str, error_msg: str) -> Dict[str, Any]:
+        """Create fallback followup analysis."""
+        followup_lower = followup_query.lower()
+        
+        # Simple followup type detection
+        if any(word in followup_lower for word in ['his', 'her', 'their', 'this']):
+            followup_type = 'entity_continuation'
+        elif any(word in followup_lower for word in ['more', 'additional', 'other']):
+            followup_type = 'expansion_request'
+        elif any(word in followup_lower for word in ['recent', 'latest', '2023', '2024']):
+            followup_type = 'temporal_filter'
+        else:
+            followup_type = 'other'
+        
+        return {
+            "followup_type": followup_type,
+            "context_relevance": "medium",
+            "context_effectiveness": "adequate",
+            "efficiency_gain": "medium",
+            "missed_opportunities": ["detailed_context_analysis_unavailable"],
+            "context_optimization": ["enable_llm_analysis"],
+            "conversation_flow": "adequate",
+            "user_intent_clarity": "somewhat_clear",
+            "memory_system_insights": ["basic_followup_detection_working"],
+            "analysis_method": "fallback_basic",
+            "llm_error": error_msg[:100]
+        }
         """Use LLM to analyze patterns across multiple observations."""
         
         # Load recent observations

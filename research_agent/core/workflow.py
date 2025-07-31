@@ -1,16 +1,18 @@
 """
-COMPLETE Enhanced workflow.py with Smart LLM-Powered Methodology Learning
-BUILDS ON: Your existing minimal callback workflow with LLM-powered learning integration
-ADDS: Smart methodology logging throughout the research process
+COMBINED Enhanced workflow.py - Best of Both Worlds
+COMBINES: Smart methodology learning + Plan-Execute architecture + LangChain automatic memory
+BUILDS ON: Original plan-execute workflow with LangChain memory integration
+FILENAME: workflow.py
 """
 
 from typing import Dict, Any, List, Optional, Literal
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_react_agent, AgentExecutor 
 from langchain_litellm import ChatLiteLLM
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 import os
 import uuid
@@ -18,29 +20,36 @@ import asyncio
 import time
 from dotenv import load_dotenv
 
+
 # CRITICAL FIX: Minimal LangSmith imports to avoid callback issues
 from langsmith import Client
 
-# Import tools, memory, and smart methodology logger
-from ..tools import get_all_tools
-from .memory_manager import IntegratedMemoryManager
+# Import LangChain memory and tools
+from .memory_manager import SessionMemoryManager
 from .methodology_logger import SmartMethodologyLogger
 
+# Import tools
+try:
+    from ..tools import get_all_tools
+    TOOLS_AVAILABLE = True
+except ImportError:
+    print("⚠️ Tools not available - falling back to basic functionality")
+    TOOLS_AVAILABLE = False
+
 # =============================================================================
-# STATE SCHEMA (UNCHANGED)
+# STATE SCHEMA - Enhanced with LangChain Memory
 # =============================================================================
 
 class PlanExecuteState(TypedDict):
-    """State schema with memory session tracking."""
+    """State schema with LangChain memory integration."""
     input: str
     plan: List[str]
     past_steps: List[tuple[str, str]]
     response: Optional[str]
     
-    # Memory tracking
-    session_id: Optional[str]
-    memory_session_id: Optional[str]
-    conversation_history: Optional[List[Dict[str, Any]]]
+    # LangChain memory integration (session_id is REQUIRED)
+    session_id: str  # Required for memory continuity - no more auto-generation!
+    chat_history: Optional[List[Any]]  # LangChain injects this automatically
 
 # =============================================================================
 # PYDANTIC MODELS (UNCHANGED)
@@ -88,7 +97,7 @@ def setup_minimal_langsmith():
         "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2", "true"),
         "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
         "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY"),
-        "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT", "research-agent-smart-methodology")
+        "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT", "combined-research-agent")
     }
     
     # Apply configuration
@@ -107,41 +116,56 @@ def setup_minimal_langsmith():
             api_url=os.getenv("LANGCHAIN_ENDPOINT"),
             api_key=os.getenv("LANGCHAIN_API_KEY")
         )
-        print("✅ LangSmith environment configured with smart methodology tracking")
+        print("✅ LangSmith environment configured with combined methodology tracking")
         return client
     except Exception as e:
         print(f"❌ LangSmith configuration error: {e}")
         return None
 
 # =============================================================================
-# MAIN WORKFLOW CREATION WITH SMART METHODOLOGY LEARNING
+# COMBINED WORKFLOW CREATION WITH SMART METHODOLOGY + LANGCHAIN MEMORY
 # =============================================================================
 
-def create_research_workflow(es_client=None, index_name: str = "research-publications-static", session_id: str = None) -> StateGraph:
+def create_combined_research_workflow(
+    es_client=None, 
+    index_name: str = "research-publications-static", 
+    session_id: str = None,
+    memory_manager: SessionMemoryManager = None
+) -> StateGraph:
     """
-    Create research workflow with SMART LLM-POWERED methodology learning.
-    BUILDS ON: Existing minimal callback workflow.
-    ADDS: Intelligent methodology observation and analysis throughout.
+    Create COMBINED research workflow: Plan-Execute + LangChain Memory + Smart Methodology Learning.
+    COMBINES: Best features from both approaches with automatic conversation context.
     """
     
     # Setup minimal LangSmith (no callbacks)
     langsmith_client = setup_minimal_langsmith()
     
     # Get tools
-    if es_client:
-        tools = get_all_tools(es_client=es_client, index_name=index_name)
-        print(f"✅ SMART METHODOLOGY workflow: Initialized {len(tools)} research tools")
+    if TOOLS_AVAILABLE:
+        if es_client:
+            tools = get_all_tools(es_client=es_client, index_name=index_name)
+            print(f"✅ COMBINED workflow: Initialized {len(tools)} research tools")
+        else:
+            tools = get_all_tools()
+            print(f"✅ COMBINED workflow: Initialized {len(tools)} research tools")
     else:
-        tools = get_all_tools()
-        print(f"✅ SMART METHODOLOGY workflow: Initialized {len(tools)} research tools")
+        tools = []
+        print("⚠️ COMBINED workflow: No tools available")
     
-    # Initialize integrated memory
-    integrated_memory = IntegratedMemoryManager(memory_type="buffer_window")
-    print("🧠 SMART METHODOLOGY workflow: Integrated memory initialized")
+    # Use provided memory manager or create new one
+    if memory_manager is None:
+        memory_manager = SessionMemoryManager(default_memory_type="buffer_window")
+        print("🧠 COMBINED workflow: Created new LangChain memory manager")
+    else:
+        print("🧠 COMBINED workflow: Using provided LangChain memory manager")
     
-    # ENHANCED: Initialize smart methodology logger
-    smart_logger = SmartMethodologyLogger()
-    print("🧠 Smart Methodology Learning system active with LLM analysis")
+    # Initialize smart methodology logger
+    try:
+        smart_logger = SmartMethodologyLogger()
+        print("🧠 Smart Methodology Learning system active with LLM analysis")
+    except Exception as e:
+        print(f"⚠️ Smart Methodology Logger initialization failed: {e}")
+        smart_logger = None
     
     # CRITICAL FIX: Create LLMs WITHOUT callback handlers
     try:
@@ -150,8 +174,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             api_key=os.getenv("LITELLM_API_KEY"),
             api_base=os.getenv("LITELLM_BASE_URL"),
             temperature=0,
-            # REMOVED: callbacks=callbacks,  # This was causing async issues
-            metadata={"component": "smart_methodology_main_llm", "session_id": session_id}
+            metadata={"component": "combined_main_llm", "session_id": session_id}
         )
         
         replanner_llm = ChatLiteLLM(
@@ -159,71 +182,68 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             api_key=os.getenv("LITELLM_API_KEY"),
             api_base=os.getenv("LITELLM_BASE_URL"),
             temperature=0,
-            # REMOVED: callbacks=callbacks,  # This was causing async issues
-            metadata={"component": "smart_methodology_replanner_llm", "session_id": session_id}
+            metadata={"component": "combined_replanner_llm", "session_id": session_id}
         )
-        print("✅ LLMs initialized WITHOUT problematic callbacks + smart methodology tracking")
+        print("✅ LLMs initialized WITHOUT problematic callbacks + combined methodology tracking")
         
     except Exception as e:
         print(f"❌ Error initializing LLMs: {e}")
         raise
     
     # =============================================================================
-    # ENHANCED WORKFLOW NODES WITH SMART METHODOLOGY LEARNING
+    # COMBINED WORKFLOW NODES WITH SMART METHODOLOGY + LANGCHAIN MEMORY
     # =============================================================================
     
     def plan_step(state: PlanExecuteState):
-        """Planning step with smart LLM-powered query analysis."""
+        """Planning step with LangChain memory context and smart analysis."""
         try:
             query = state["input"]
-            conversation_history = state.get("conversation_history", [])
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            session_id = state["session_id"]
             
-            print(f"📋 SMART METHODOLOGY Planning for query: {query}")
-            print(f"🧠 Memory session ID: {memory_session_id}")
+            if not session_id:
+                raise ValueError("session_id is required for memory continuity")
             
-            # ENHANCED: Smart query analysis with rich context
+            print(f"📋 COMBINED Planning for query: {query}")
+            print(f"🧠 Session ID: {session_id}")
+            
+            # Get LangChain conversation history
+            conversation_history = memory_manager.get_conversation_history(session_id)
+            
+            # SMART LOGGING: Intelligent query analysis with conversation context
             is_followup = len(conversation_history) > 0
             previous_context = ""
             if is_followup and conversation_history:
-                # Get richer context for LLM analysis
                 prev_user_messages = [msg for msg in conversation_history if msg.get('role') == 'user']
                 prev_ai_messages = [msg for msg in conversation_history if msg.get('role') == 'assistant']
                 
                 if prev_user_messages and prev_ai_messages:
                     previous_context = f"Previous query: {prev_user_messages[-1].get('content', '')}\nPrevious response: {prev_ai_messages[-1].get('content', '')[:300]}"
             
-            # SMART LOGGING: Intelligent query analysis
-            smart_logger.log_query_start(
-                memory_session_id, query, is_followup, previous_context
-            )
-            
-            # Build conversation context
-            context_str = ""
-            if conversation_history:
-                context_lines = []
-                for msg in conversation_history[-4:]:
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')[:150]
-                    context_lines.append(f"{role.title()}: {content}...")
-                context_str = "\n".join(context_lines)
-            else:
-                context_str = "No previous conversation history."
+            if smart_logger:
+                smart_logger.log_query_start(
+                    session_id, query, is_followup, previous_context
+                )
             
             # Format tool information
-            tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
+            tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools]) if tools else "No tools available"
             
-            # Create planning prompt
-            planning_prompt_text = f"""Create a step-by-step research plan for: "{query}"
+            # COMBINED: Use LangChain memory for automatic context injection
+            planning_prompt_text = """Create a step-by-step research plan for: "{input}"
+
+Previous conversation:
+{chat_history}
 
 Available research tools:
 {tool_descriptions}
 
-Conversation context:
-{context_str}
-
 Create 3-4 specific research steps that will thoroughly answer the user's question about authors, publications, or research fields.
 Each step should be clear, actionable, and build upon previous steps.
+
+If this is a follow-up question based on our previous conversation:
+- Reference previously discussed authors, topics, or findings
+- Build upon earlier research results without repeating identical searches
+- Use pronouns and context naturally ("his publications", "her research areas")
+- Avoid redundant searches for information we've already gathered
 
 Focus on:
 - Author information (affiliations, research areas)
@@ -233,11 +253,20 @@ Focus on:
 
 Steps:"""
             
-            # Create planner WITHOUT callbacks
+            # Create planner with LangChain memory context
             planner_prompt = ChatPromptTemplate.from_template(planning_prompt_text)
+            
+            # Get memory for automatic context injection
+            memory = memory_manager.get_memory_for_session(session_id)
+            memory_vars = memory.load_memory_variables({})
+            
             planner = planner_prompt | llm.with_structured_output(Plan)
             
-            plan = planner.invoke({})
+            plan = planner.invoke({
+                "input": query,
+                "chat_history": memory_vars.get("chat_history", []),
+                "tool_descriptions": tool_descriptions
+            })
             
             print(f"📋 Created plan with {len(plan.steps)} steps:")
             for i, step in enumerate(plan.steps, 1):
@@ -245,23 +274,23 @@ Steps:"""
             
             return {
                 "plan": plan.steps,
-                "memory_session_id": memory_session_id
+                "chat_history": memory_vars.get("chat_history", [])
             }
             
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY planning: {e}")
+            print(f"❌ Error in COMBINED planning: {e}")
             fallback_plan = [f"Research comprehensive information about: {query}"]
             return {
                 "plan": fallback_plan,
-                "memory_session_id": str(uuid.uuid4())
+                "chat_history": []
             }
     
     def execute_step(state: PlanExecuteState):
-        """Execution step with smart tool effectiveness analysis."""
+        """Execution step with Claude-compatible LangChain ReAct agent and tool effectiveness logging."""
         try:
             plan = state["plan"]
             past_steps = state.get("past_steps", [])
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            session_id = state["session_id"]
             
             if not plan:
                 print("⚠️ No plan available for execution")
@@ -269,210 +298,210 @@ Steps:"""
             
             task = plan[0]
             original_query = state.get("input", "")
-            
-            print(f"🔧 SMART METHODOLOGY Executing task: {task}")
-            
-            # Build execution context
-            research_context = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=5)
-            print(f"📋 Research context: {len(research_context):,} chars")
-            
-            # Build execution prompt
-            execution_prompt = f"""You are executing a research task to help answer questions about authors, publications, and research fields.
+            print(f"🔧 COMBINED Executing task: {task}")
 
-RESEARCH OBJECTIVE: {original_query}
+            if tools:
+                execution_start = time.time()
 
-CURRENT TASK: {task}
+                try:
+                    # Create a Claude-friendly task prompt
+                    context_aware_input = f"""Research Objective: {original_query}
 
-PREVIOUS RESEARCH CONTEXT:
-{research_context}
+Current Task: {task}
 
-INSTRUCTIONS:
+Instructions:
 - Use the available research tools to gather specific, detailed information
+- This is part of a multi-step research plan to answer: "{original_query}"
 - Focus on concrete findings: names, numbers, dates, affiliations, publications
 - Look for patterns in research areas, collaboration networks, and publication trends
 - Provide comprehensive results with supporting evidence
-- Be thorough in your search and analysis
 
-Execute this task now using the available tools."""
-            
-            # CRITICAL FIX: Execute WITHOUT callbacks
-            agent_executor = create_react_agent(llm, tools, prompt=execution_prompt)
-            
-            # Minimal config without problematic callbacks
-            config = {
-                "metadata": {
-                    "step": "smart_methodology_execute",
-                    "task": task,
-                    "session_id": session_id,
-                    "memory_session_id": memory_session_id,
-                    "step_number": len(past_steps) + 1
-                }
-                # REMOVED: "callbacks": callbacks  # This was causing async issues
-            }
-            
-            # ENHANCED: Track execution with timing
-            execution_start = time.time()
-            
-            # Execute with minimal callback approach
-            try:
-                result = agent_executor.invoke({
-                    "messages": [HumanMessage(content=f"Execute this research task: {task}")]
-                }, config=config)
-                
-                response_content = result["messages"][-1].content
-                execution_time = time.time() - execution_start
-                
-                print(f"✅ SMART METHODOLOGY Task completed: {len(response_content):,} chars in {execution_time:.1f}s")
-                
-            except Exception as exec_error:
-                print(f"❌ Execution error: {exec_error}")
-                response_content = f"Error executing task '{task}': {str(exec_error)}"
-                execution_time = time.time() - execution_start
-            
-            # SMART LOGGING: Intelligent tool effectiveness analysis
+Execute this research task now."""
+
+                    # Define Claude-compatible prompt
+                    prompt = ChatPromptTemplate.from_messages([
+                        ("system",
+                        "You are a helpful research assistant that uses tools to answer questions.\n\n"
+                        "Available tools:\n{tools}\n\n"
+                        "Tool names: {tool_names}\n\n"
+                        "When you use a tool, format your response as:\n"
+                        "Thought: I need to use a tool\n"
+                        "Action: <tool name>\n"
+                        "Action Input: <input>\n\n"
+                        "Then wait for the result.\n"
+                        "When you have enough information, respond with:\n"
+                        "Final Answer: <answer>"
+                        ),
+                        ("user", "{input}"),
+                        ("assistant", "{agent_scratchpad}")
+                    ])
+
+                    # Create agent using Claude and prompt
+                    agent_runnable: Runnable = create_react_agent(
+                        llm=llm,
+                        tools=tools,
+                        prompt=prompt
+                    )
+
+                    agent_executor = AgentExecutor(
+                        agent=agent_runnable,
+                        tools=tools,
+                        verbose=True,
+                        handle_parsing_errors=True,
+                        max_iterations=10,
+                        early_stopping_method="force",
+                        return_intermediate_steps=False
+                    )
+
+                    # Prepare tool metadata for prompt injection
+                    tool_descriptions = "\n".join([f"{tool.name}: {tool.description}" for tool in tools])
+                    tool_names = [tool.name for tool in tools]
+
+                    # Invoke agent
+                    result = agent_executor.invoke({
+                        "input": context_aware_input,
+                        "tools": tool_descriptions,
+                        "tool_names": tool_names
+                    })
+
+                    response_content = result.get("output", "No response generated")
+                    execution_time = time.time() - execution_start
+                    print(f"✅ COMBINED Task completed: {len(response_content):,} chars in {execution_time:.1f}s")
+
+                except Exception as exec_error:
+                    print(f"❌ Execution error: {exec_error}")
+                    response_content = f"Error executing task '{task}': {str(exec_error)}"
+                    execution_time = time.time() - execution_start
+            else:
+                response_content = f"No tools available to execute task: {task}"
+                execution_time = 0
+
+            # SMART LOGGING
             success = len(response_content) > 100 and "error" not in response_content.lower()
-            
-            smart_logger.log_tool_usage(
-                memory_session_id,
-                "research_agent",  # Could be more specific about which tools were used
-                task,
-                success,
-                response_content,  # Full result for LLM analysis
-                f"Execution time: {execution_time:.1f}s, Steps completed: {len(past_steps) + 1}, Success: {success}"
-            )
-            
-            # Store FULL result
-            reference_id = integrated_memory.store_research_step(
-                memory_session_id,
-                task,
-                response_content
-            )
-            
-            print(f"📚 SMART METHODOLOGY Stored result as: {reference_id}")
-            
-            updated_past_steps = past_steps + [(task, f"COMPLETE research stored as {reference_id}")]
-            
+
+            if smart_logger:
+                smart_logger.log_tool_usage(
+                    session_id,
+                    "research_agent",
+                    task,
+                    success,
+                    response_content,
+                    f"Execution time: {execution_time:.1f}s, Steps completed: {len(past_steps) + 1}, Success: {success}"
+                )
+
+            updated_past_steps = past_steps + [(task, response_content)]
             return {"past_steps": updated_past_steps}
-        
+
         except Exception as e:
             error_response = f"Error executing task: {str(e)}"
-            print(f"❌ Error in SMART METHODOLOGY execute_step: {e}")
-            
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            print(f"❌ Error in COMBINED execute_step: {e}")
+
+            session_id = state.get("session_id", "unknown")
             task = plan[0] if plan else "unknown_task"
-            
-            # SMART LOGGING: Log tool failure
-            smart_logger.log_tool_usage(
-                memory_session_id,
-                "research_agent",
-                task,
-                False,  # Failed
-                error_response,
-                f"Tool execution failed with error: {str(e)}"
-            )
-            
-            try:
-                integrated_memory.store_research_step(memory_session_id, task, error_response)
-            except Exception as mem_error:
-                print(f"⚠️ Could not store error in memory: {mem_error}")
-            
+
+            if smart_logger:
+                smart_logger.log_tool_usage(
+                    session_id,
+                    "research_agent",
+                    task,
+                    False,
+                    error_response,
+                    f"Tool execution failed with error: {str(e)}"
+                )
+
             updated_past_steps = state.get("past_steps", []) + [(task, error_response)]
             return {"past_steps": updated_past_steps}
-    
+
+
     def replan_step(state: PlanExecuteState):
-        """Replanning step with intelligent session and replanning analysis."""
+        """Replanning step with LangChain memory context and intelligent session analysis."""
         try:
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            session_id = state.get("session_id", "unknown")
             original_plan = state.get("plan", [])
             past_steps = state.get("past_steps", [])
             
-            print(f"🔄 SMART METHODOLOGY Replanning for session: {memory_session_id}")
+            print(f"🔄 COMBINED Replanning for session: {session_id}")
             
-            # ENHANCED: Track session timing for comprehensive analysis
+            # Track session timing for comprehensive analysis
             session_start_time = getattr(replan_step, 'session_start_time', None)
             if session_start_time is None:
                 replan_step.session_start_time = time.time()
                 session_start_time = replan_step.session_start_time
             
-            # Get research context with full content for LLM analysis
-            research_summary = integrated_memory.get_research_context_summary(
-                memory_session_id, 
-                max_recent_steps=3
-            )
+            # Get memory context
+            memory = memory_manager.get_memory_for_session(session_id)
+            memory_vars = memory.load_memory_variables({})
             
-            print(f"📋 Research context: {len(research_summary):,} chars")
+            # Build research summary from past steps
+            research_summary = ""
+            if past_steps:
+                research_parts = []
+                for step_task, step_result in past_steps[-3:]:  # Last 3 steps
+                    preview = step_result[:1000] + ("..." if len(step_result) > 1000 else "")
+                    research_parts.append(f"Task: {step_task}\nResult: {preview}")
+                research_summary = "\n\n".join(research_parts)
+            else:
+                research_summary = "No research steps completed yet."
             
-            # Verify we have research data
-            if research_summary == "No research steps completed yet.":
-                if past_steps:
-                    research_summary = f"Completed {len(past_steps)} research steps. Latest: {past_steps[-1][0]}"
-                else:
-                    research_summary = "No research completed yet."
+            print(f"📋 Research summary: {len(research_summary):,} chars")
             
-            # Create replanning prompt
-            replanning_prompt = f"""You are a research replanner with access to COMPLETE research results.
+            # COMBINED: Create replanning prompt with LangChain memory and research context
+            replanning_prompt_text = """You are a research replanner with access to conversation history and research results.
+
+Previous conversation:
+{chat_history}
 
 ANALYSIS CONTEXT:
-Original objective: {state["input"]}
+Original objective: {input}
 Original plan: {original_plan}
 
 COMPLETE RESEARCH RESULTS:
 {research_summary}
 
 DECISION CRITERIA:
-Based on these COMPLETE research results, decide whether to:
+Based on the conversation history and complete research results, decide whether to:
 1. **Provide a final response** (action_type: "response") - if comprehensive information is available
 2. **Continue with more steps** (action_type: "plan") - if critical information is missing
 
 GUIDELINES FOR RESPONSE:
 ✅ Provide final response when:
-- User's question has been comprehensively answered with COMPLETE information
+- User's question has been comprehensively answered with detailed information
 - The research results contain sufficient detail and context
-- No critical information gaps remain in the FULL research content
-- The research objective has been met with rich, detailed findings
+- No critical information gaps remain in the complete research content
+- Previous conversation shows the research objective has been met with rich findings
 
 GUIDELINES FOR PLAN:
 ⚠️ Continue with plan only when:
 - Important aspects of the query remain genuinely unanswered
-- Need specific additional data not present in COMPLETE current research
-- Current FULL results are incomplete for comprehensive answer
+- Need specific additional data not present in complete current research
+- Current full results are incomplete for comprehensive answer
 - Missing critical information despite having detailed research content
 
 RESPONSE QUALITY (when providing final response):
-- Lead with direct answer to user's specific question
-- Include relevant statistics, counts, and examples from COMPLETE research
+- Reference our conversation context naturally when relevant
+- Include relevant statistics, counts, and examples from complete research
 - Use clear structure with headers and formatting
 - Address all aspects of the original query with full context
+- Build upon any previous discussion points from our conversation
 - Mention scope and limitations when relevant
 
-Make your decision based on the COMPLETE research content available:"""
+Make your decision based on the complete context and research results:"""
             
-            # Create replanner WITHOUT callbacks
-            replanner_prompt = ChatPromptTemplate.from_template(replanning_prompt)
+            # Create replanner with memory and research context
+            replanner_prompt = ChatPromptTemplate.from_template(replanning_prompt_text)
             replanner = replanner_prompt | replanner_llm.with_structured_output(Act)
             
-            # Minimal config
-            config = {
-                "metadata": {
-                    "step": "smart_methodology_replanning",
-                    "memory_session_id": memory_session_id,
-                    "session_id": session_id
-                }
-                # REMOVED: "callbacks": callbacks
-            }
-            
-            # Execute replanner without callbacks
-            try:
-                response = replanner.invoke({}, config=config)
-            except Exception as replan_error:
-                print(f"❌ Replanner execution error: {replan_error}")
-                return {"response": f"Research completed with smart methodology tracking. Error in replanning: {str(replan_error)}"}
+            # Execute replanner with full context
+            response = replanner.invoke({
+                "input": state["input"],
+                "chat_history": memory_vars.get("chat_history", []),
+                "original_plan": original_plan,
+                "research_summary": research_summary
+            })
             
             if response.action_type == "response":
                 # SMART LOGGING: Comprehensive session completion analysis
                 execution_time = time.time() - session_start_time
-                
-                # Count actual replanning events
                 replanning_count = len([step for step in past_steps if "replan" in step[1].lower()])
                 
                 # Assess final success intelligently
@@ -483,103 +512,78 @@ Make your decision based on the COMPLETE research content available:"""
                     final_success = "failed"
                 
                 # Get comprehensive research results for LLM analysis
-                comprehensive_data = integrated_memory.get_comprehensive_final_response_data(memory_session_id)
-                full_results = "\n\n".join(comprehensive_data.get('full_results', [])[:2])  # Top 2 results
+                full_results = "\n\n".join([step[1] for step in past_steps[-2:]])  # Top 2 results
                 
-                smart_logger.log_session_complete(
-                    memory_session_id,
-                    state["input"],
-                    len(past_steps),
-                    replanning_count,
-                    final_success,
-                    execution_time,
-                    full_results
+                if smart_logger:
+                    smart_logger.log_session_complete(
+                        session_id,
+                        state["input"],
+                        len(past_steps),
+                        replanning_count,
+                        final_success,
+                        execution_time,
+                        full_results
+                    )
+                
+                # CRITICAL: Save final interaction to LangChain memory for continuity
+                memory = memory_manager.get_memory_for_session(session_id)
+                memory.save_context(
+                    {"input": state["input"]},
+                    {"output": response.response}
                 )
                 
-                # Create comprehensive final response
-                if comprehensive_data['full_results']:
-                    enhanced_response = f"""{response.response}
-
-## 📊 Complete Research Analysis
-
-"""
-                    
-                    for i, full_result in enumerate(comprehensive_data['full_results'][:2], 1):
-                        result_preview = full_result[:2000] + ("..." if len(full_result) > 2000 else "")
-                        enhanced_response += f"""### Research Step {i} Results:
-{result_preview}
-
-"""
-                    
-                    enhanced_response += f"""---
-*Analysis based on {comprehensive_data['total_steps']} complete research steps with {comprehensive_data['total_content_length']:,} total characters. Smart methodology learning enabled.*"""
-                else:
-                    enhanced_response = f"""{response.response}
-
----
-*Research completed with {comprehensive_data['total_steps']} comprehensive steps using smart methodology tracking.*"""
-                
-                print("✅ SMART METHODOLOGY replanner: Providing final response with LLM analysis")
-                return {"response": enhanced_response}
+                print("✅ COMBINED replanner: Providing final response with memory saved")
+                return {"response": response.response}
             else:
                 # SMART LOGGING: Intelligent replanning analysis
-                # Determine replanning reason intelligently
+                replanning_reason = "Research incomplete - expanding investigation scope"
                 if len(past_steps) == 0:
                     replanning_reason = "Initial planning phase - setting up research approach"
                 elif "no research steps completed yet" in research_summary.lower():
                     replanning_reason = "No research progress made - need different approach"
                 elif len(research_summary) < 500:
                     replanning_reason = "Insufficient research results - need additional investigation"
-                else:
-                    replanning_reason = "Research incomplete - expanding investigation scope"
                 
-                # Describe approaches for LLM analysis
                 previous_approach = f"Plan with {len(original_plan)} steps: {', '.join(original_plan[:2])}{'...' if len(original_plan) > 2 else ''}"
                 new_approach = f"Revised plan with {len(response.steps or [])} steps: {', '.join((response.steps or [])[:2])}{'...' if len(response.steps or []) > 2 else ''}"
                 
-                smart_logger.log_replanning_event(
-                    memory_session_id,
-                    state["input"],
-                    len(past_steps) + 1,
-                    replanning_reason,
-                    previous_approach,
-                    new_approach,
-                    research_summary  # Full context for LLM analysis
-                )
+                if smart_logger:
+                    smart_logger.log_replanning_event(
+                        session_id,
+                        state["input"],
+                        len(past_steps) + 1,
+                        replanning_reason,
+                        previous_approach,
+                        new_approach,
+                        research_summary
+                    )
                 
-                print(f"🔄 SMART METHODOLOGY replanner: Continuing with more steps")
+                print(f"🔄 COMBINED replanner: Continuing with more steps")
                 return {"plan": response.steps or []}
                 
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY replanning: {e}")
+            print(f"❌ Error in COMBINED replanning: {e}")
             
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            # Try to save something to memory even on error
+            session_id = state.get("session_id", "unknown")
             try:
-                fallback_summary = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=2)
-                
-                if fallback_summary != "No research steps completed yet.":
-                    fallback_response = f"""Based on research completed with smart methodology tracking:
-
-{fallback_summary[:1000]}{"..." if len(fallback_summary) > 1000 else ""}
-
----
-*Research completed successfully. Smart methodology learning enabled.*"""
-                else:
-                    fallback_response = "Research completed with smart methodology tracking."
-                
+                memory = memory_manager.get_memory_for_session(session_id)
+                fallback_response = f"Research completed with combined methodology. Error in replanning: {str(e)}"
+                memory.save_context(
+                    {"input": state["input"]},
+                    {"output": fallback_response}
+                )
                 return {"response": fallback_response}
-                
-            except Exception as fallback_error:
-                print(f"⚠️ Fallback also failed: {fallback_error}")
-                return {"response": f"Research error during replanning: {str(e)}. Smart methodology analysis captured for learning."}
+            except:
+                return {"response": f"Research error during replanning: {str(e)}. Combined methodology analysis captured for learning."}
     
     def should_end(state: PlanExecuteState) -> Literal["agent", "__end__"]:
         """Simple decision function for workflow routing."""
         if state.get("response"):
-            print("✅ SMART METHODOLOGY: Final response available - ending workflow")
+            print("✅ COMBINED: Final response available - ending workflow")
             return "__end__"
         else:
-            print("🔄 SMART METHODOLOGY: Continuing to agent execution")
+            print("🔄 COMBINED: Continuing to agent execution")
             return "agent"
     
     # =============================================================================
@@ -603,7 +607,7 @@ Make your decision based on the COMPLETE research content available:"""
         ["agent", END]
     )
     
-    print("🧠 SMART METHODOLOGY workflow constructed with LLM-powered learning")
+    print("🧠 COMBINED workflow constructed with Plan-Execute + LangChain Memory + Smart Methodology")
     
     return workflow
 
@@ -611,19 +615,32 @@ Make your decision based on the COMPLETE research content available:"""
 # HELPER FUNCTIONS
 # =============================================================================
 
-def compile_research_agent(es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, session_id: str = None):
-    """Compile research agent with smart methodology learning."""
-    workflow = create_research_workflow(es_client, index_name, session_id)
+def compile_combined_research_agent(
+    es_client=None, 
+    index_name: str = "research-publications-static", 
+    recursion_limit: int = 50, 
+    session_id: str = None,
+    memory_manager: SessionMemoryManager = None
+):
+    """Compile combined research agent with plan-execute + LangChain memory."""
+    workflow = create_combined_research_workflow(es_client, index_name, session_id, memory_manager)
     app = workflow.compile()
     return app
 
-def run_research_query(query: str, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, stream: bool = False, conversation_history: Optional[List[Dict]] = None, session_id: str = None) -> Dict[str, Any]:
-    """Run research query using SMART METHODOLOGY patterns."""
+def run_combined_research_query(
+    query: str, 
+    session_id: str,
+    es_client=None, 
+    index_name: str = "research-publications-static", 
+    recursion_limit: int = 50,
+    memory_manager: SessionMemoryManager = None
+) -> Dict[str, Any]:
+    """Run research query using COMBINED methodology with session continuity."""
     
     if not session_id:
-        session_id = str(uuid.uuid4())
+        raise ValueError("session_id is REQUIRED for combined methodology with memory continuity")
     
-    app = compile_research_agent(es_client, index_name, recursion_limit, session_id)
+    app = compile_combined_research_agent(es_client, index_name, recursion_limit, session_id, memory_manager)
     
     initial_state = {
         "input": query,
@@ -631,8 +648,7 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         "past_steps": [],
         "response": None,
         "session_id": session_id,
-        "memory_session_id": str(uuid.uuid4()),
-        "conversation_history": conversation_history or []
+        "chat_history": []  # Will be populated by LangChain memory
     }
     
     config = {
@@ -641,87 +657,128 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
             "query": query,
             "session_id": session_id,
             "index_name": index_name,
-            "has_conversation_history": bool(conversation_history),
-            "agent_type": "smart_methodology"
+            "agent_type": "combined_plan_execute_langchain_memory"
         },
-        "tags": ["smart_methodology_agent", "plan_execute", f"session_{session_id}"]
+        "tags": ["combined_methodology_agent", "plan_execute", "langchain_memory", f"session_{session_id}"]
     }
     
-    if stream:
-        final_state = None
-        for event in app.stream(initial_state, config=config):
-            for k, v in event.items():
-                if k != "__end__":
-                    final_state = v
-        return final_state
-    else:
-        result = app.invoke(initial_state, config=config)
-        return result
+    result = app.invoke(initial_state, config=config)
+    return result
 
 # =============================================================================
-# RESEARCH AGENT CLASS WITH SMART METHODOLOGY
+# COMBINED RESEARCH AGENT CLASS
 # =============================================================================
 
-class ResearchAgent:
-    """Research Agent using smart methodology learning."""
+class CombinedResearchAgent:
+    """Combined Research Agent using Plan-Execute + LangChain Memory + Smart Methodology."""
     
     def __init__(self, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50):
         self.es_client = es_client
         self.index_name = index_name
         self.recursion_limit = recursion_limit
         self.app = None
-        self.langsmith_client = setup_minimal_langsmith()
+        
+        # Initialize LangChain memory manager
+        self.memory_manager = SessionMemoryManager(default_memory_type="buffer_window")
+        print("🧠 CombinedResearchAgent: LangChain memory manager initialized")
 
-    def _compile_agent(self, session_id: str = None):
-        """Compile agent with smart methodology learning."""
-        self.app = compile_research_agent(
+    def _compile_agent(self, session_id: str):
+        """Compile agent with combined workflow."""
+        if not session_id:
+            raise ValueError("session_id is required for combined agent compilation")
+        
+        self.app = compile_combined_research_agent(
             self.es_client, 
             self.index_name, 
             self.recursion_limit,
-            session_id
+            session_id,
+            self.memory_manager
         )
 
-    async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None):
-        """Stream query with smart methodology learning."""
+    def execute_query(self, session_id: str, query: str) -> Dict[str, Any]:
+        """Execute query with combined workflow and LangChain memory."""
         
-        session_id = str(uuid.uuid4())
-        memory_session_id = str(uuid.uuid4())
-        self._compile_agent(session_id)
+        if not session_id:
+            return {
+                "success": False,
+                "error": "session_id is REQUIRED for combined methodology with memory continuity",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
         
-        initial_state = {
-            "input": query,
-            "plan": [],
-            "past_steps": [],
-            "response": None,
-            "session_id": session_id,
-            "memory_session_id": memory_session_id,
-            "conversation_history": conversation_history or []
-        }
-        
-        config = {
-            "recursion_limit": self.recursion_limit,
-            "metadata": {
-                "query": query,
-                "session_id": session_id,
-                "memory_session_id": memory_session_id,
-                "index_name": self.index_name,
-                "agent_type": "smart_methodology"
-            },
-            "tags": ["smart_methodology_agent", "streaming", f"session_{session_id}"]
-        }
-        
-        # Stream with smart methodology learning
         try:
-            print("🚀 Starting SMART METHODOLOGY stream with LLM analysis")
-            async for event in self.app.astream(initial_state, config=config):
-                yield event
-            print("✅ SMART METHODOLOGY stream completed with learning insights")
+            self._compile_agent(session_id)
+            
+            result = run_combined_research_query(
+                query, 
+                session_id, 
+                self.es_client, 
+                self.index_name, 
+                self.recursion_limit,
+                self.memory_manager
+            )
+            
+            return {
+                "success": True,
+                "response": result.get("response", "No response generated"),
+                "session_id": session_id,
+                "agent_type": "combined_plan_execute_langchain_memory",
+                "memory_type": "langchain_automatic",
+                "architecture": "plan_execute_with_smart_methodology"
+            }
+            
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY streaming: {e}")
-            yield {"error": {"error": str(e)}}
+            return {
+                "success": False,
+                "error": f"Combined research execution failed: {str(e)}",
+                "session_id": session_id,
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
+    
+    def get_conversation_context(self, session_id: str) -> str:
+        """Get formatted conversation context for debugging."""
+        try:
+            conversation_history = self.memory_manager.get_conversation_history(session_id)
+            
+            if not conversation_history:
+                return "No conversation history"
+            
+            context_parts = []
+            for msg in conversation_history:
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')[:200] + ("..." if len(msg.get('content', '')) > 200 else "")
+                context_parts.append(f"{role.title()}: {content}")
+            
+            return "\n".join(context_parts)
+            
+        except Exception as e:
+            return f"Error getting context: {str(e)}"
+    
+    def clear_session(self, session_id: str):
+        """Clear memory for specific session."""
+        if session_id:
+            self.memory_manager.clear_session_memory(session_id)
+            print(f"🗑️ Cleared combined session: {session_id}")
+    
+    def get_session_stats(self, session_id: str) -> Dict[str, Any]:
+        """Get statistics for specific session."""
+        return self.memory_manager.get_session_info(session_id)
+    
+    def get_all_sessions_stats(self) -> Dict[str, Any]:
+        """Get statistics for all sessions."""
+        stats = self.memory_manager.get_memory_stats()
+        stats.update({
+            "agent_type": "combined_plan_execute_langchain_memory",
+            "architecture": "plan_execute_with_smart_methodology",
+            "memory_system": "langchain_automatic"
+        })
+        return stats
+
+def create_combined_research_agent(es_client=None, index_name: str = "research-publications-static") -> CombinedResearchAgent:
+    """Factory function to create combined research agent."""
+    return CombinedResearchAgent(es_client, index_name)
 
 if __name__ == "__main__":
-    print("Testing SMART METHODOLOGY workflow with LLM-powered learning...")
+    print("Testing Combined Research Agent with Plan-Execute + LangChain Memory...")
     
     try:
         from dotenv import load_dotenv
@@ -729,11 +786,12 @@ if __name__ == "__main__":
     except ImportError:
         pass
     
-    print("✅ SMART METHODOLOGY workflow loaded successfully!")
+    print("✅ Combined workflow loaded successfully!")
     print("🧠 Key features:")
-    print("  - LLM-powered query analysis and categorization")
-    print("  - Intelligent tool effectiveness assessment")
-    print("  - Smart replanning reason analysis")
-    print("  - Comprehensive session outcome evaluation")
-    print("  - Dynamic pattern recognition and learning")
-    print("  - No hard-coded rules - fully adaptive")
+    print("  - Plan-and-execute architecture with intelligent replanning")
+    print("  - LangChain automatic conversation memory injection via {chat_history}")
+    print("  - Smart methodology learning with LLM-powered analysis")
+    print("  - Tool effectiveness tracking and session analytics")
+    print("  - Session continuity across multiple queries")
+    print("  - No manual context building - all handled by LangChain")
+    print("  - Best of both worlds: sophisticated workflow + proven memory")

@@ -1,17 +1,18 @@
 """
-Updated Flask Application - Using standard LangGraph implementation
+Updated Flask Application - Using Combined Architecture
+UPDATED: Now imports CombinedAgentManager instead of AgentManager
 """
 
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# UPDATED IMPORT - Use standard implementation with original names
-from research_agent.core.agent_manager import AgentManager
+# UPDATED IMPORT - Use combined architecture with correct names
+from research_agent.core.agent_manager import CombinedAgentManager
 
 
 def create_app():
-    """Create and configure Flask app with standard LangGraph implementation."""
+    """Create and configure Flask app with combined architecture."""
     app = Flask(__name__)
     
     # Properly disable Flask sessions entirely
@@ -22,8 +23,8 @@ def create_app():
     # Enable CORS
     CORS(app)
     
-    # Initialize the agent manager (now uses standard implementation)
-    agent_manager = AgentManager()
+    # Initialize the combined agent manager
+    agent_manager = CombinedAgentManager()
     
     @app.route('/')
     def index():
@@ -33,7 +34,7 @@ def create_app():
                 with open('index.html', 'r', encoding='utf-8') as f:
                     return f.read()
             else:
-                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p><p><strong>Powered by Standard LangGraph Plan-and-Execute</strong></p>'
+                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p><p><strong>Powered by Combined Plan-Execute + LangChain Memory</strong></p>'
         except Exception as e:
             return f'<h1>Error</h1><p>{str(e)}</p>'
 
@@ -56,7 +57,7 @@ def create_app():
 
     @app.route('/chat/respond', methods=['POST'])
     def chat_respond():
-        """Handle chat requests with standard LangGraph processing."""
+        """Handle chat requests with combined architecture processing."""
         try:
             data = request.get_json()
             
@@ -75,7 +76,7 @@ def create_app():
                     "error": "Empty message"
                 }), 400
 
-            # Agent manager handles everything
+            # Combined agent manager handles everything
             result = agent_manager.process_query(query, session_id)
             
             if result['success']:
@@ -85,21 +86,23 @@ def create_app():
                     "session_id": result['session_id'],
                     "execution_time": result.get('execution_time', 0),
                     "response_type": result.get('response_type', 'unknown'),
-                    "agent_type": result.get('agent_type', 'standard_langgraph')
+                    "agent_type": result.get('agent_type', 'combined_plan_execute_langchain_memory'),
+                    "architecture": result.get('architecture', 'combined'),
+                    "conversation_length": result.get('conversation_length', 0)
                 })
             else:
                 return jsonify({
                     "success": False,
                     "error": result['error'],
                     "session_id": result.get('session_id'),
-                    "agent_type": result.get('agent_type', 'standard_langgraph')
+                    "agent_type": result.get('agent_type', 'combined_plan_execute_langchain_memory')
                 }), 500
                 
         except Exception as e:
             return jsonify({
                 "success": False, 
                 "error": f"Server error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "agent_type": "combined_plan_execute_langchain_memory"
             }), 500
 
     @app.route('/chat/clear-memory', methods=['POST'])
@@ -113,7 +116,7 @@ def create_app():
                 return jsonify({
                     "success": False,
                     "error": "session_id required",
-                    "agent_type": "standard_langgraph"
+                    "agent_type": "combined_plan_execute_langchain_memory"
                 }), 400
             
             result = agent_manager.clear_memory(session_id)
@@ -127,7 +130,7 @@ def create_app():
             return jsonify({
                 "success": False,
                 "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "agent_type": "combined_plan_execute_langchain_memory"
             }), 500
 
     @app.route('/chat/session-info/<session_id>')
@@ -145,7 +148,7 @@ def create_app():
             return jsonify({
                 "success": False,
                 "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "agent_type": "combined_plan_execute_langchain_memory"
             }), 500
 
     @app.route('/admin/memory-stats')
@@ -157,7 +160,7 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "agent_type": "combined_plan_execute_langchain_memory"
             }), 500
 
     @app.route('/admin/tools-info')
@@ -169,7 +172,20 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }), 500
+
+    @app.route('/admin/smart-methodology-insights')
+    def smart_methodology_insights():
+        """Get smart methodology insights."""
+        try:
+            days = request.args.get('days', 7, type=int)
+            insights = agent_manager.get_smart_methodology_insights(days)
+            return jsonify(insights)
+        except Exception as e:
+            return jsonify({
+                "error": f"Error: {str(e)}",
+                "agent_type": "combined_plan_execute_langchain_memory"
             }), 500
 
     # Error handlers
@@ -178,7 +194,7 @@ def create_app():
         return jsonify({
             "success": False,
             "error": "Endpoint not found",
-            "agent_type": "standard_langgraph"
+            "agent_type": "combined_plan_execute_langchain_memory"
         }), 404
 
     @app.errorhandler(500)
@@ -186,7 +202,7 @@ def create_app():
         return jsonify({
             "success": False,
             "error": "Internal server error",
-            "agent_type": "standard_langgraph"
+            "agent_type": "combined_plan_execute_langchain_memory"
         }), 500
 
     return app
@@ -212,12 +228,13 @@ if __name__ == '__main__':
         port = int(os.getenv('FLASK_PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
         
-        print(f"🚀 Starting Research Agent Server (Standard LangGraph)")
+        print(f"🚀 Starting Research Agent Server (Combined Architecture)")
         print(f"🌐 URL: http://{host}:{port}")
         print(f"🔧 Debug: {debug}")
-        print(f"📝 Sessions: Fully disabled")
-        print(f"⚡ Architecture: Standard LangGraph Plan-and-Execute")
-        print(f"🛠️ Based on: https://langchain-ai.github.io/langgraph/tutorials/plan-and-execute/")
+        print(f"📝 Sessions: Required for memory continuity")
+        print(f"⚡ Architecture: Plan-Execute + LangChain Memory + Smart Methodology")
+        print(f"🧠 Memory: Automatic conversation context injection")
+        print(f"🎯 Features: Sophisticated research workflow with perfect memory")
         
         app.run(host=host, port=port, debug=debug, use_reloader=False)
         

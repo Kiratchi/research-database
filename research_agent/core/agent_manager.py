@@ -1,7 +1,8 @@
 """
-COMPLETE Enhanced agent_manager.py with Smart LLM-Powered Methodology Learning
-BUILDS ON: Your existing refined async agent manager with smart learning integration
-ADDS: Intelligent follow-up analysis and methodology insights
+COMBINED Agent Manager - Best of Both Worlds
+COMBINES: Smart methodology learning + Plan-Execute architecture + LangChain memory + Session management
+BUILDS ON: Sophisticated workflow with automatic conversation context
+FILENAME: agent_manager.py
 """
 
 import os
@@ -15,8 +16,8 @@ import concurrent.futures
 from typing import Dict, List, Any, Optional
 from elasticsearch import Elasticsearch
 
-from .memory_manager import IntegratedMemoryManager
-from .workflow import ResearchAgent
+from .workflow import create_combined_research_agent, CombinedResearchAgent
+from .memory_manager import SessionMemoryManager
 from .methodology_logger import SmartMethodologyLogger
 
 # Import tools
@@ -28,22 +29,25 @@ except ImportError:
     TOOLS_AVAILABLE = False
 
 
-class AgentManager:
+class CombinedAgentManager:
     """
-    Agent coordinator with SMART METHODOLOGY learning and refined async handling.
-    ENHANCED: Includes LLM-powered methodology analysis and learning.
+    Combined Agent Manager with Plan-Execute + LangChain Memory + Smart Methodology Learning.
+    COMBINES: Best features from both approaches with session-based memory management.
     """
     
     def __init__(self, index_name: str = "research-publications-static"):
-        """Initialize with smart methodology learning and refined async handling."""
+        """Initialize with combined methodology: plan-execute + LangChain memory."""
         self.index_name = index_name
         self.query_stats = {
             "total_queries": 0,
             "successful_queries": 0,
             "failed_queries": 0,
-            "agent_type": "smart_methodology_refined_async",
-            "langsmith_errors_prevented": True,
-            "graceful_stream_completion": True,
+            "agent_type": "combined_plan_execute_langchain_memory",
+            "architecture": "plan_execute_with_smart_methodology",
+            "memory_system": "langchain_automatic",
+            "context_injection": "automatic",
+            "manual_context_building": False,
+            "session_continuity": True,
             "smart_methodology_learning": True,
             "llm_powered_analysis": True
         }
@@ -53,15 +57,16 @@ class AgentManager:
         self.memory_manager = self._init_memory()
         self.research_agent = self._init_research_agent()
         
-        # ENHANCED: Initialize smart methodology logger
+        # Initialize smart methodology logger
         try:
             self.smart_logger = SmartMethodologyLogger()
-            print("🧠 Smart Methodology Logger initialized in AgentManager")
+            print("🧠 Smart Methodology Logger initialized in CombinedAgentManager")
         except Exception as e:
             print(f"⚠️ Smart Methodology Logger initialization failed: {e}")
             self.smart_logger = None
         
-        print("🚀 AgentManager initialized with SMART METHODOLOGY learning and refined async handling!")
+        print("🚀 CombinedAgentManager initialized with PLAN-EXECUTE + LANGCHAIN MEMORY + SMART METHODOLOGY!")
+        print("🎯 Architecture: Best of both worlds approach")
     
     def _init_elasticsearch(self) -> Optional[Elasticsearch]:
         """Initialize Elasticsearch client."""
@@ -83,7 +88,7 @@ class AgentManager:
             )
             
             if es_client.ping():
-                print("✅ Elasticsearch connected (smart methodology + refined async)")
+                print("✅ Elasticsearch connected (combined methodology)")
                 return es_client
             else:
                 print("❌ Elasticsearch connection failed")
@@ -93,77 +98,91 @@ class AgentManager:
             print(f"❌ Elasticsearch error: {e}")
             return None
     
-    def _init_memory(self) -> IntegratedMemoryManager:
-        """Initialize integrated memory manager."""
+    def _init_memory(self) -> SessionMemoryManager:
+        """Initialize LangChain session memory manager."""
         try:
-            memory_manager = IntegratedMemoryManager(
-                memory_type="buffer_window",
-                cleanup_interval=3600
+            memory_manager = SessionMemoryManager(
+                default_memory_type="buffer_window"
             )
-            print("✅ Integrated memory manager initialized (smart methodology + refined async)")
+            print("✅ LangChain session memory manager initialized (combined methodology)")
             return memory_manager
         except Exception as e:
-            print(f"❌ Memory error: {e}")
-            return IntegratedMemoryManager()
+            print(f"❌ Memory manager error: {e}")
+            # Fallback to basic memory manager
+            return SessionMemoryManager()
     
-    def _init_research_agent(self) -> Optional[ResearchAgent]:
-        """Initialize research agent."""
+    def _init_research_agent(self) -> Optional[CombinedResearchAgent]:
+        """Initialize combined research agent."""
         try:
-            if not self.es_client:
-                print("⚠️ Research agent initialized without Elasticsearch")
-                return None
-            
-            research_agent = ResearchAgent(
+            research_agent = create_combined_research_agent(
                 es_client=self.es_client,
-                index_name=self.index_name,
-                recursion_limit=50
+                index_name=self.index_name
             )
-            print("✅ Research agent initialized (smart methodology + refined async)")
+            print("✅ Combined research agent initialized (plan-execute + LangChain memory)")
             return research_agent
         except Exception as e:
-            print(f"❌ Research agent error: {e}")
+            print(f"❌ Combined research agent error: {e}")
             return None
     
     def is_ready(self) -> bool:
         """Check if system is ready."""
         return (
-            self.es_client is not None and 
             self.memory_manager is not None and
             self.research_agent is not None and
-            self.es_client.ping()
+            (self.es_client is None or self.es_client.ping())  # ES is optional
         )
     
     def process_query(self, query: str, session_id: str = None) -> Dict[str, Any]:
         """
-        Process query with SMART METHODOLOGY learning and refined async handling.
+        Process query with COMBINED methodology: Plan-Execute + LangChain Memory + Smart Learning.
         ENHANCED: Includes intelligent follow-up analysis and methodology insights.
         """
+        
+        # Enforce session_id requirement for memory continuity
         if not session_id:
-            session_id = f'smart_methodology_{int(time.time())}_{str(uuid.uuid4())[:8]}'
+            self.query_stats["failed_queries"] += 1
+            return {
+                "success": False,
+                "error": "session_id is REQUIRED for combined methodology with memory continuity",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
+        
+        # Validate session_id format
+        if not isinstance(session_id, str) or len(session_id) < 10:
+            self.query_stats["failed_queries"] += 1
+            return {
+                "success": False,
+                "error": f"Invalid session_id format: {session_id}. Must be string with 10+ characters",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
         
         self.query_stats["total_queries"] += 1
         start_time = time.time()
         
         try:
-            print(f"🔍 Processing (SMART METHODOLOGY + REFINED ASYNC): '{query}' (session: {session_id})")
+            print(f"🔍 Processing with COMBINED METHODOLOGY for session: {session_id}")
+            print(f"📝 Query: '{query}'")
             
             # ENHANCED: Smart follow-up detection and analysis
-            conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
+            conversation_history = self.memory_manager.get_conversation_history(session_id)
             self._analyze_and_log_followup(query, session_id, conversation_history)
             
-            # Handle simple queries
+            # Handle simple queries (optional optimization)
             simple_response = self._handle_simple_query(query)
             if simple_response:
+                # Save to LangChain memory for consistency
                 self.memory_manager.save_conversation(session_id, query, simple_response)
-                self.query_stats["successful_queries"] += 1
                 
+                self.query_stats["successful_queries"] += 1
                 return {
                     "success": True,
                     "response": simple_response,
                     "session_id": session_id,
                     "execution_time": time.time() - start_time,
                     "response_type": "simple",
-                    "agent_type": "smart_methodology_refined_async"
+                    "agent_type": "combined_plan_execute_langchain_memory",
+                    "memory_automatic": True,
+                    "conversation_length": len(conversation_history) + 2  # +2 for current exchange
                 }
             
             # Check system readiness
@@ -171,50 +190,51 @@ class AgentManager:
                 self.query_stats["failed_queries"] += 1
                 return {
                     "success": False,
-                    "error": "System not ready - Elasticsearch required",
+                    "error": "System not ready - combined research agent unavailable",
                     "session_id": session_id,
-                    "agent_type": "smart_methodology_refined_async"
+                    "agent_type": "combined_plan_execute_langchain_memory"
                 }
             
-            # Execute with SMART METHODOLOGY + refined async handling
-            response_content = self._execute_smart_methodology_workflow(query, conversation_history, session_id)
+            # Execute with combined research agent (plan-execute + LangChain memory)
+            result = self.research_agent.execute_query(session_id, query)
             
-            if not response_content:
+            if not result["success"]:
                 self.query_stats["failed_queries"] += 1
-                return {
-                    "success": False,
-                    "error": "No response generated",
-                    "session_id": session_id,
-                    "agent_type": "smart_methodology_refined_async"
-                }
+                return result
             
-            # Save to memory
-            self.memory_manager.save_conversation(session_id, query, response_content)
             self.query_stats["successful_queries"] += 1
             
-            return {
-                "success": True,
-                "response": response_content,
-                "session_id": session_id,
+            # Get updated conversation info
+            updated_conversation_history = self.memory_manager.get_conversation_history(session_id)
+            
+            # Add execution metadata
+            result.update({
                 "execution_time": time.time() - start_time,
                 "response_type": "research",
-                "agent_type": "smart_methodology_refined_async",
-                "stream_completed_gracefully": True,
-                "langsmith_errors_prevented": True,
-                "smart_methodology_enabled": True
-            }
+                "agent_type": "combined_plan_execute_langchain_memory",
+                "memory_automatic": True,
+                "context_injection": "automatic",
+                "conversation_length": len(updated_conversation_history),
+                "architecture": "plan_execute_with_smart_methodology"
+            })
+            
+            print(f"✅ Query processed with COMBINED METHODOLOGY for session: {session_id}")
+            print(f"🧠 Conversation length: {result.get('conversation_length', 0)} messages")
+            print(f"⚡ Architecture: Plan-Execute + LangChain Memory + Smart Learning")
+            
+            return result
             
         except Exception as e:
             self.query_stats["failed_queries"] += 1
-            error_msg = f"Error processing query: {str(e)}"
-            print(f"❌ {error_msg}")
+            error_msg = f"Error processing query with combined methodology: {str(e)}"
+            print(f"❌ {error_msg} for session: {session_id}")
             
             return {
                 "success": False,
                 "error": error_msg,
                 "session_id": session_id,
                 "execution_time": time.time() - start_time,
-                "agent_type": "smart_methodology_refined_async"
+                "agent_type": "combined_plan_execute_langchain_memory"
             }
     
     def _analyze_and_log_followup(self, query: str, session_id: str, conversation_history: List[Dict]) -> None:
@@ -246,7 +266,7 @@ class AgentManager:
                     efficiency_observations
                 )
                 
-                print(f"🔗 Smart follow-up analysis logged for session: {session_id}")
+                print(f"🔗 Smart follow-up analysis logged for combined session: {session_id}")
                 
         except Exception as e:
             print(f"⚠️ Could not log smart follow-up analysis: {e}")
@@ -273,7 +293,8 @@ class AgentManager:
 - Pronoun Usage: {has_context_pronouns} (indicates context awareness)
 - Keyword Overlap with Original: {keyword_overlap} words
 - Builds on Previous Response: {response_overlap} shared concepts
-- Previous Response Length: {len(previous_response)} characters"""
+- Previous Response Length: {len(previous_response)} characters
+- Memory System: LangChain automatic injection with Plan-Execute workflow"""
         
         return context_analysis
     
@@ -293,251 +314,131 @@ class AgentManager:
         # Check for relationship exploration
         has_relationships = any(word in followup_query.lower() for word in ['collaborate', 'work with', 'team', 'colleagues'])
         
-        efficiency_analysis = f"""Efficiency Patterns:
+        efficiency_analysis = f"""Efficiency Patterns (Combined Methodology):
 - Conversation Depth: {conversation_depth} exchanges
 - Query Evolution: {query_evolution} focus
 - Temporal Elements: {has_temporal} (seeking recent information)
 - Relationship Exploration: {has_relationships} (exploring connections)
 - Query Length Change: {len(followup_query)} vs {len(original_query)} characters
-- Efficiency Indicators: {'High' if conversation_depth <= 3 else 'Medium' if conversation_depth <= 5 else 'Low'}"""
+- Efficiency Indicators: {'High' if conversation_depth <= 3 else 'Medium' if conversation_depth <= 5 else 'Low'}
+- Architecture: Plan-Execute with LangChain memory provides superior context handling"""
         
         return efficiency_analysis
     
     def _handle_simple_query(self, query: str) -> Optional[str]:
-        """Handle simple queries."""
+        """Handle simple queries with combined methodology context."""
         query_clean = query.lower().strip().rstrip('!?.,;:')
         
         greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon']
         if query_clean in greetings:
-            return "Hello! I'm your research assistant with smart methodology learning that uses LLM analysis to continuously improve. What would you like to research?"
+            return "Hello! I'm your research assistant with combined methodology: sophisticated Plan-Execute workflow with automatic LangChain memory and smart learning. I'll remember our entire conversation naturally. What would you like to research?"
         
         thanks = ['thanks', 'thank you', 'thx', 'ty']
         if query_clean in thanks:
-            return "You're welcome! Feel free to ask about authors, research publications, or academic fields."
+            return "You're welcome! Feel free to ask follow-up questions - my combined architecture with LangChain memory ensures perfect conversation continuity."
         
         help_patterns = ['help', 'what can you do', 'how does this work']
         if any(pattern in query_clean for pattern in help_patterns):
-            return """I can help you research authors and academic fields with smart methodology learning:
+            return """I can help you research authors and academic fields with combined methodology architecture:
 
 **🔍 Research Capabilities:**
 • Author information and publication analysis
-• Research trend identification
+• Research trend identification  
 • Collaboration network mapping
 • Field-specific searches
 
-**🧠 Smart Learning Features:**
-• LLM-powered query analysis and categorization
-• Intelligent tool effectiveness assessment
-• Smart replanning reason analysis
-• Dynamic pattern recognition and adaptation
-• Follow-up question optimization
+**🧠 Combined Architecture Features:**
+• Plan-Execute workflow for comprehensive research
+• LangChain automatic conversation memory
+• Smart methodology learning with LLM analysis
+• Intelligent replanning based on research progress
+• Tool effectiveness tracking and optimization
+• Session-based memory continuity
 
-**🛠️ Technical Features:**
-• Refined async handling with graceful stream completion
-• Proper LangSmith integration without CancelledErrors
-• Complete information preservation
-• Production-ready architecture
+**🎯 Advanced Memory Features:**
+• Natural follow-up questions: "What are his publications?" "Any recent ones?"
+• Context-aware research planning
+• No repetition of previous searches
+• Builds upon conversation history automatically
 
-**🎯 Key Improvements:**
-• No hard-coded rules - fully adaptive methodology learning
-• LLM analyzes what works and what doesn't
-• Continuously improves based on real usage patterns
-• Generates actionable insights for system enhancement
+**💡 Try this conversation flow:**
+1. "Who is Per-Olof Arnäs?"
+2. "What are his main research areas?" 
+3. "Find his recent publications"
+4. "Who does he collaborate with?"
 
-Just ask me about any researcher or academic field!"""
+My combined Plan-Execute + LangChain memory architecture provides the most sophisticated research experience with perfect conversation continuity!"""
         
         return None
     
-    def _execute_smart_methodology_workflow(self, query: str, conversation_history: List, session_id: str) -> str:
-        """
-        Execute workflow with SMART METHODOLOGY learning and refined async handling.
-        ENHANCED: Combines refined async execution with LLM-powered methodology analysis.
-        """
-        if not self.research_agent:
-            raise Exception("Research agent not available")
+    def clear_memory(self, session_id: str) -> Dict[str, Any]:
+        """Clear LangChain memory for specific session."""
+        if not session_id:
+            return {
+                "success": False,
+                "error": "session_id is required to clear memory",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
         
-        print(f"🔬 Executing SMART METHODOLOGY + REFINED ASYNC workflow for: '{query}'")
-        print(f"📝 Context: {len(conversation_history)} previous messages")
-        print(f"🧠 Using smart methodology learning with LLM analysis")
-        
-        # REFINED FIX: Use dedicated thread with graceful completion + smart learning
-        def run_with_smart_learning_and_graceful_completion():
-            """Run workflow with smart methodology learning and graceful stream completion."""
-            
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                print("🧵 Running in isolated thread with smart learning + graceful completion")
-                
-                # Run the async workflow and let it complete naturally
-                result = loop.run_until_complete(
-                    self._smart_methodology_async_runner(query, conversation_history)
-                )
-                
-                print("✅ Stream completed gracefully with smart methodology insights")
-                return result
-                
-            except Exception as e:
-                print(f"❌ Error in smart methodology + graceful completion thread: {e}")
-                return f"Error in smart methodology workflow: {str(e)}"
-            
-            finally:
-                # REFINED cleanup - only after stream is completely done
-                try:
-                    print("🧹 Starting refined async cleanup after smart methodology analysis...")
-                    
-                    # Give the stream a moment to fully complete
-                    try:
-                        loop.run_until_complete(asyncio.sleep(0.1))
-                    except:
-                        pass
-                    
-                    # Get only the tasks that are actually pending (not completed)
-                    all_tasks = asyncio.all_tasks(loop)
-                    truly_pending_tasks = [
-                        task for task in all_tasks 
-                        if not task.done() and not task.cancelled()
-                    ]
-                    
-                    if truly_pending_tasks:
-                        print(f"🔄 Found {len(truly_pending_tasks)} truly pending tasks to clean up")
-                        
-                        # Cancel only truly pending tasks
-                        for task in truly_pending_tasks:
-                            if not task.done():
-                                task.cancel()
-                        
-                        # Wait for cancellation with shorter timeout
-                        async def refined_cleanup():
-                            try:
-                                await asyncio.wait_for(
-                                    asyncio.gather(*truly_pending_tasks, return_exceptions=True),
-                                    timeout=2.0  # Shorter timeout
-                                )
-                                print("✅ Refined cleanup completed with smart methodology")
-                            except asyncio.TimeoutError:
-                                print("⚠️ Refined cleanup timeout (acceptable for some background tasks)")
-                            except Exception as e:
-                                print(f"⚠️ Refined cleanup info: {e}")
-                        
-                        # Run refined cleanup
-                        try:
-                            loop.run_until_complete(refined_cleanup())
-                        except Exception as e:
-                            print(f"⚠️ Refined cleanup completion info: {e}")
-                    else:
-                        print("✅ No pending tasks found - stream completed cleanly with smart learning")
-                    
-                    # Close the loop gracefully
-                    if not loop.is_closed():
-                        loop.close()
-                        print("✅ Event loop closed gracefully")
-                    
-                except Exception as cleanup_error:
-                    print(f"⚠️ Refined cleanup info: {cleanup_error}")
-                    # Force close if needed
-                    try:
-                        if not loop.is_closed():
-                            loop.close()
-                    except:
-                        pass
-        
-        # REFINED FIX: Run with longer timeout to allow graceful completion + smart analysis
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="SmartMethodologyAsync") as executor:
-                future = executor.submit(run_with_smart_learning_and_graceful_completion)
-                result = future.result(timeout=900)  # 15 minute timeout for complex queries
-                return result
-                
-        except concurrent.futures.TimeoutError:
-            print("❌ Smart methodology workflow timeout")
-            return "Research workflow timed out after 15 minutes."
+            if self.research_agent:
+                self.research_agent.clear_session(session_id)
+                return {
+                    "success": True,
+                    "message": f"Cleared combined methodology memory for session: {session_id}",
+                    "agent_type": "combined_plan_execute_langchain_memory",
+                    "architecture": "plan_execute_with_smart_methodology"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Combined research agent not available",
+                    "agent_type": "combined_plan_execute_langchain_memory"
+                }
         except Exception as e:
-            print(f"❌ Smart methodology workflow error: {e}")
-            return f"Error in smart methodology workflow: {str(e)}"
+            return {
+                "success": False,
+                "error": f"Error clearing memory for session {session_id}: {str(e)}",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
     
-    async def _smart_methodology_async_runner(self, query: str, conversation_history: List) -> str:
-        """
-        ENHANCED async runner with smart methodology learning.
-        COMBINES: Refined async execution + LLM-powered analysis.
-        """
-        response_content = ""
-        event_count = 0
-        memory_session_id = None
+    def get_session_info(self, session_id: str) -> Dict[str, Any]:
+        """Get information about a specific session with combined methodology context."""
+        if not session_id:
+            return {
+                "success": False,
+                "error": "session_id is required",
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
         
         try:
-            print("🚀 Starting SMART METHODOLOGY async runner with LLM analysis")
-            
-            # SMART METHODOLOGY: Stream with intelligent analysis
-            stream_generator = self.research_agent.stream_query(query, conversation_history)
-            
-            # Let the stream complete naturally while capturing methodology insights
-            async for event_data in stream_generator:
-                event_count += 1
-                
-                # Process event data normally
-                if isinstance(event_data, dict):
-                    for node_name, node_data in event_data.items():
-                        
-                        # Track memory session
-                        if isinstance(node_data, dict) and "memory_session_id" in node_data:
-                            memory_session_id = node_data["memory_session_id"]
-                            print(f"🔗 Memory session tracked: {memory_session_id}")
-                        
-                        # Look for final response
-                        if node_name == "__end__" and isinstance(node_data, dict):
-                            if "response" in node_data:
-                                response_content = node_data["response"]
-                                print(f"✅ SMART METHODOLOGY: Found final response in __end__ node")
-                                break
-                        elif node_name == "replan" and isinstance(node_data, dict):
-                            if "response" in node_data:
-                                response_content = node_data["response"]
-                                print(f"✅ SMART METHODOLOGY: Found final response in replan node")
-                                break
-                
-                # Break if we found response
-                if response_content:
-                    break
-            
-            print(f"🎯 Smart methodology stream completed naturally with {event_count} events")
-            
-            # REFINED: Only do gentle cleanup of the stream generator itself
-            try:
-                # Allow the generator to close naturally
-                if hasattr(stream_generator, 'aclose'):
-                    await stream_generator.aclose()
-                print("✅ Stream generator closed gracefully")
-            except Exception as e:
-                print(f"⚠️ Stream generator close info: {e}")
-            
-            # Handle completion
-            if not response_content:
-                print(f"⚠️ SMART METHODOLOGY: Stream ended after {event_count} events without response")
-                if memory_session_id:
-                    try:
-                        research_summary = self.memory_manager.get_research_context_summary(memory_session_id)
-                        if research_summary and research_summary != "No research steps completed yet.":
-                            response_content = f"Research completed with smart methodology learning:\n\n{research_summary[:2000]}{'...' if len(research_summary) > 2000 else ''}"
-                        else:
-                            response_content = "Research completed with smart methodology learning."
-                    except Exception as e:
-                        print(f"⚠️ Could not get research summary: {e}")
-                        response_content = "Research completed with smart methodology learning."
-                else:
-                    response_content = "Research completed with smart methodology learning."
-            
-            print(f"✅ SMART METHODOLOGY: Async runner completed gracefully with {event_count} events")
-            return response_content
-            
+            if self.research_agent:
+                session_stats = self.research_agent.get_session_stats(session_id)
+                session_stats.update({
+                    "success": True,
+                    "agent_type": "combined_plan_execute_langchain_memory",
+                    "memory_system": "langchain_automatic",
+                    "architecture": "plan_execute_with_smart_methodology",
+                    "workflow_type": "sophisticated_research_with_replanning"
+                })
+                return session_stats
+            else:
+                return {
+                    "success": False,
+                    "error": "Combined research agent not available",
+                    "session_id": session_id,
+                    "agent_type": "combined_plan_execute_langchain_memory"
+                }
         except Exception as e:
-            print(f"❌ Error in smart methodology async runner: {e}")
-            return f"Error in smart methodology workflow: {str(e)}"
+            return {
+                "success": False,
+                "error": f"Error retrieving session info for {session_id}: {str(e)}",
+                "session_id": session_id,
+                "agent_type": "combined_plan_execute_langchain_memory"
+            }
     
     def get_status(self) -> Dict[str, Any]:
-        """Get system status with smart methodology information."""
+        """Get system status with combined methodology information."""
         es_connected = False
         if self.es_client:
             try:
@@ -545,55 +446,53 @@ Just ask me about any researcher or academic field!"""
             except:
                 es_connected = False
         
-        memory_stats = self.memory_manager.get_memory_stats() if self.memory_manager else {}
+        memory_stats = {}
+        if self.research_agent:
+            try:
+                memory_stats = self.research_agent.get_all_sessions_stats()
+            except:
+                memory_stats = {}
         
         return {
             "system_ready": self.is_ready(),
-            "architecture": "smart_methodology_refined_async",
-            "stream_completion": "graceful",
-            "langsmith_compatible": True,
-            "smart_methodology_enabled": True,
+            "architecture": "combined_plan_execute_langchain_memory",
+            "workflow_type": "plan_execute_with_smart_methodology",
+            "memory_system": "langchain_automatic",
+            "context_injection": "automatic",
+            "manual_context_building": False,
+            "session_continuity": True,
+            "smart_methodology_learning": True,
             "llm_powered_analysis": True,
-            "learning_capabilities": [
-                "LLM-powered query analysis and categorization",
-                "Intelligent tool effectiveness assessment", 
-                "Smart replanning reason analysis",
-                "Dynamic pattern recognition and adaptation",
-                "Follow-up question optimization",
-                "Comprehensive session outcome evaluation"
-            ],
-            "async_improvements": [
-                "Graceful stream completion prevents CancelledError",
-                "Refined cleanup only after stream finishes naturally",
-                "Proper LangSmith integration without exceptions",
-                "Isolated thread execution with longer timeouts",
-                "Production-ready async architecture"
-            ],
+            "session_handling": "strict_frontend_requirement",
             "elasticsearch": {
                 "connected": es_connected,
                 "host": os.getenv("ES_HOST", "Not configured"),
-                "index": self.index_name
+                "index": self.index_name,
+                "required": False  # ES is optional
             },
             "memory": {
-                "initialized": self.memory_manager is not None,
-                "type": "IntegratedMemoryManager_SmartMethodology",
-                "conversation_sessions": memory_stats.get("total_sessions", 0),
-                "research_sessions": memory_stats.get("research_sessions", 0),
-                "total_research_steps": memory_stats.get("total_research_steps", 0),
-                "fact_extractor_removed": True,
-                "information_preservation": "complete"
+                "type": "langchain_session_based",
+                "automatic_injection": True,
+                "manual_context_building": False,
+                "conversation_continuity": True,
+                "total_sessions": memory_stats.get("total_sessions", 0),
+                "total_messages": memory_stats.get("total_messages", 0),
+                "average_messages_per_session": memory_stats.get("average_messages_per_session", 0)
             },
             "research_agent": {
-                "initialized": self.research_agent is not None,
-                "type": "SmartMethodologyResearchAgent",
-                "architecture": "smart_methodology_refined_async_graceful_completion"
+                "type": "CombinedResearchAgent",
+                "workflow": "plan_execute_with_replanning",
+                "automatic_memory": True,
+                "smart_methodology": True,
+                "initialized": self.research_agent is not None
             },
             "smart_methodology": {
                 "logger_initialized": self.smart_logger is not None,
                 "analysis_type": "llm_powered",
                 "learning_active": True,
                 "adaptive_categorization": True,
-                "no_hardcoded_rules": True
+                "no_hardcoded_rules": True,
+                "workflow_integration": "seamless"
             },
             "statistics": self.query_stats
         }
@@ -605,7 +504,8 @@ Just ask me about any researcher or academic field!"""
                 return {
                     "success": False,
                     "error": "Smart methodology logger not initialized",
-                    "analysis_type": "llm_powered"
+                    "analysis_type": "llm_powered",
+                    "architecture": "combined_plan_execute_langchain_memory"
                 }
             
             insights = self.smart_logger.generate_llm_insights_summary(days)
@@ -613,6 +513,7 @@ Just ask me about any researcher or academic field!"""
                 "success": True,
                 "insights": insights,
                 "analysis_type": "llm_powered",
+                "architecture": "combined_plan_execute_langchain_memory",
                 "period_days": days,
                 "generated_at": time.time()
             }
@@ -620,168 +521,151 @@ Just ask me about any researcher or academic field!"""
             return {
                 "success": False,
                 "error": f"Failed to generate smart insights: {str(e)}",
-                "analysis_type": "llm_powered"
+                "analysis_type": "llm_powered",
+                "architecture": "combined_plan_execute_langchain_memory"
             }
     
     def get_memory_stats(self) -> Dict[str, Any]:
-        """Get enhanced memory statistics with smart methodology info."""
-        base_stats = self.memory_manager.get_memory_stats() if self.memory_manager else {}
-        
-        # Add smart methodology information
-        base_stats.update({
-            "smart_methodology_enabled": self.smart_logger is not None,
-            "analysis_capabilities": [
-                "Query type classification",
-                "Tool effectiveness assessment",
-                "Replanning reason analysis", 
-                "Session outcome evaluation",
-                "Follow-up optimization",
-                "Pattern recognition"
-            ],
-            "learning_type": "llm_powered_adaptive"
-        })
-        
-        return base_stats
-    
-    def get_session_info(self, session_id: str) -> Dict[str, Any]:
-        """Get enhanced session information including methodology insights."""
-        try:
-            # Get base conversation info
-            conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
-            
-            # Get research context if available
-            research_context = ""
+        """Get comprehensive memory statistics with combined methodology info."""
+        if self.research_agent:
             try:
-                research_context = self.memory_manager.get_research_context_summary(session_id, max_recent_steps=3)
-            except:
-                research_context = "No research context available"
-            
+                base_stats = self.research_agent.get_all_sessions_stats()
+                base_stats.update({
+                    "architecture": "combined_plan_execute_langchain_memory",
+                    "workflow_type": "plan_execute_with_smart_methodology",
+                    "memory_system": "langchain_automatic",
+                    "automatic_context_injection": True,
+                    "manual_context_building": False,
+                    "session_continuity": True,
+                    "smart_methodology_enabled": self.smart_logger is not None,
+                    "analysis_capabilities": [
+                        "Query type classification with conversation context",
+                        "Tool effectiveness assessment in plan-execute workflow",
+                        "Replanning reason analysis with memory integration", 
+                        "Session outcome evaluation with smart learning",
+                        "Follow-up optimization with LangChain memory",
+                        "Pattern recognition across conversation sessions"
+                    ],
+                    "learning_type": "llm_powered_adaptive_with_memory_integration"
+                })
+                return base_stats
+            except Exception as e:
+                return {
+                    "error": f"Error getting memory stats: {str(e)}",
+                    "architecture": "combined_plan_execute_langchain_memory"
+                }
+        else:
             return {
-                "success": True,
-                "session_id": session_id,
-                "conversation_messages": len(conversation_history),
-                "has_research_context": research_context != "No research context available",
-                "research_context_length": len(research_context),
-                "smart_methodology_enabled": True,
-                "analysis_type": "llm_powered",
-                "conversation_preview": conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error retrieving session info: {str(e)}",
-                "session_id": session_id
+                "error": "Combined research agent not available",
+                "architecture": "combined_plan_execute_langchain_memory"
             }
     
     def get_tools_info(self) -> Dict[str, Any]:
         """Get detailed information about available tools."""
         try:
-            if TOOLS_AVAILABLE:
-                tools = get_all_tools(self.es_client, self.index_name) if self.es_client else get_all_tools()
-                
-                tools_info = []
-                for tool in tools:
-                    tools_info.append({
-                        "name": tool.name,
-                        "description": tool.description,
-                        "type": str(type(tool).__name__)
-                    })
-                
-                return {
-                    "success": True,
-                    "total_tools": len(tools_info),
-                    "tools": tools_info,
-                    "elasticsearch_connected": self.es_client is not None,
-                    "smart_methodology_tracking": True
-                }
+            if self.research_agent and hasattr(self.research_agent, 'es_client'):
+                # Get tools info from the research agent
+                if TOOLS_AVAILABLE:
+                    if self.research_agent.es_client:
+                        tools = get_all_tools(self.research_agent.es_client, self.research_agent.index_name)
+                    else:
+                        tools = get_all_tools()
+                    
+                    tools_info = []
+                    for tool in tools:
+                        tools_info.append({
+                            "name": tool.name,
+                            "description": tool.description,
+                            "type": str(type(tool).__name__)
+                        })
+                    
+                    return {
+                        "success": True,
+                        "total_tools": len(tools_info),
+                        "tools": tools_info,
+                        "elasticsearch_connected": self.es_client is not None and self.es_client.ping() if self.es_client else False,
+                        "agent_type": "combined_plan_execute_langchain_memory",
+                        "architecture": "plan_execute_with_smart_methodology"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Tools not available",
+                        "total_tools": 0,
+                        "tools": [],
+                        "agent_type": "combined_plan_execute_langchain_memory"
+                    }
             else:
                 return {
                     "success": False,
-                    "error": "Tools not available",
+                    "error": "Combined research agent not available",
                     "total_tools": 0,
-                    "tools": []
+                    "tools": [],
+                    "agent_type": "combined_plan_execute_langchain_memory"
                 }
         except Exception as e:
             return {
                 "success": False,
                 "error": f"Error retrieving tools info: {str(e)}",
                 "total_tools": 0,
-                "tools": []
-            }
-    
-    def clear_memory(self, session_id: str) -> Dict[str, Any]:
-        """Clear memory with smart methodology tracking."""
-        try:
-            self.memory_manager.clear_session_memory(session_id)
-            return {
-                "success": True,
-                "message": f"Cleared memory for session: {session_id}",
-                "agent_type": "smart_methodology_refined_async"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error clearing memory: {str(e)}",
-                "agent_type": "smart_methodology_refined_async"
+                "tools": [],
+                "agent_type": "combined_plan_execute_langchain_memory"
             }
     
     def health_check(self) -> Dict[str, Any]:
-        """Health check with smart methodology verification."""
+        """Health check with combined methodology verification."""
         health = {
             "status": "healthy",
             "timestamp": time.time(),
-            "architecture": "smart_methodology_refined_async",
-            "stream_handling": "graceful_completion",
-            "langsmith_integration": "error_free",
-            "async_handling": "refined",
-            "smart_methodology": "llm_powered",
+            "architecture": "combined_plan_execute_langchain_memory",
+            "workflow_type": "plan_execute_with_smart_methodology",
+            "memory_system": "langchain_automatic",
+            "context_injection": "automatic",
+            "session_continuity": True,
             "checks": {}
         }
         
-        # Test refined async handling with smart methodology
+        # Test session enforcement (should fail without session_id)
         try:
-            def test_smart_methodology_async():
-                """Test async with smart methodology and graceful completion."""
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-                async def test_stream():
-                    # Simulate a stream with smart analysis
-                    for i in range(3):
-                        await asyncio.sleep(0.001)
-                        yield f"smart_event_{i}"
-                
-                async def consume_stream():
-                    result = ""
-                    async for event in test_stream():
-                        result += event + " "
-                    return result.strip() + " smart_methodology_analysis_completed"
-                
-                try:
-                    result = loop.run_until_complete(consume_stream())
-                    return result
-                finally:
-                    # Graceful shutdown
-                    remaining_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
-                    if remaining_tasks:
-                        for task in remaining_tasks:
-                            task.cancel()
-                        try:
-                            loop.run_until_complete(asyncio.gather(*remaining_tasks, return_exceptions=True))
-                        except:
-                            pass
-                    
-                    if not loop.is_closed():
-                        loop.close()
-            
-            # Test in thread
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(test_smart_methodology_async)
-                result = future.result(timeout=10)
-                health["checks"]["smart_methodology_async_streams"] = f"healthy ({result})"
-                
+            test_result = self.process_query("test", session_id=None)
+            if test_result["success"] == False and "session_id is REQUIRED" in test_result["error"]:
+                health["checks"]["session_enforcement"] = "healthy (correctly rejects missing session_id)"
+            else:
+                health["checks"]["session_enforcement"] = "degraded (should reject missing session_id)"
+                health["status"] = "degraded"
         except Exception as e:
-            health["checks"]["smart_methodology_async_streams"] = f"degraded ({str(e)})"
+            health["checks"]["session_enforcement"] = f"degraded ({str(e)})"
+            health["status"] = "degraded"
+        
+        # Test combined research agent
+        if self.research_agent:
+            health["checks"]["combined_research_agent"] = "healthy (plan-execute + LangChain memory)"
+        else:
+            health["checks"]["combined_research_agent"] = "unhealthy"
+            health["status"] = "degraded"
+        
+        # Test Elasticsearch (optional)
+        try:
+            if self.es_client and self.es_client.ping():
+                health["checks"]["elasticsearch"] = "healthy (optional)"
+            elif self.es_client:
+                health["checks"]["elasticsearch"] = "unhealthy (but optional)"
+            else:
+                health["checks"]["elasticsearch"] = "not configured (optional)"
+        except:
+            health["checks"]["elasticsearch"] = "unhealthy (but optional)"
+        
+        # Test LangChain memory
+        try:
+            if self.memory_manager:
+                test_session = f"health_check_{int(time.time())}"
+                stats = self.memory_manager.get_session_info(test_session)
+                health["checks"]["langchain_memory"] = "healthy (automatic context injection)"
+            else:
+                health["checks"]["langchain_memory"] = "unhealthy (memory manager not available)"
+                health["status"] = "degraded"
+        except Exception as e:
+            health["checks"]["langchain_memory"] = f"degraded ({str(e)})"
             health["status"] = "degraded"
         
         # Test smart methodology logger
@@ -790,44 +674,20 @@ Just ask me about any researcher or academic field!"""
                 health["checks"]["smart_methodology_logger"] = "healthy (llm_powered)"
             else:
                 health["checks"]["smart_methodology_logger"] = "unavailable"
-                health["status"] = "degraded"
+                # Don't mark as degraded since it's optional
         except Exception as e:
             health["checks"]["smart_methodology_logger"] = f"degraded ({str(e)})"
-            health["status"] = "degraded"
-        
-        # Standard checks
-        try:
-            if self.es_client and self.es_client.ping():
-                health["checks"]["elasticsearch"] = "healthy"
-            else:
-                health["checks"]["elasticsearch"] = "unhealthy"
-                health["status"] = "degraded"
-        except:
-            health["checks"]["elasticsearch"] = "unhealthy"
-            health["status"] = "degraded"
-        
-        if self.memory_manager:
-            health["checks"]["memory"] = "healthy (smart methodology)"
-        else:
-            health["checks"]["memory"] = "unhealthy"
-            health["status"] = "degraded"
-        
-        if self.research_agent:
-            health["checks"]["research_agent"] = "healthy (smart methodology)"
-        else:
-            health["checks"]["research_agent"] = "unhealthy"
-            health["status"] = "degraded"
         
         return health
 
 
-def create_agent_manager(index_name: str = "research-publications-static") -> AgentManager:
-    """Create agent manager with smart methodology learning and refined async handling."""
-    return AgentManager(index_name=index_name)
+def create_combined_agent_manager(index_name: str = "research-publications-static") -> CombinedAgentManager:
+    """Create combined agent manager with plan-execute + LangChain memory + smart methodology."""
+    return CombinedAgentManager(index_name=index_name)
 
 
 if __name__ == "__main__":
-    print("Testing AgentManager with SMART METHODOLOGY learning and REFINED async handling...")
+    print("Testing CombinedAgentManager with PLAN-EXECUTE + LANGCHAIN MEMORY + SMART METHODOLOGY...")
     
     try:
         from dotenv import load_dotenv
@@ -835,27 +695,33 @@ if __name__ == "__main__":
     except ImportError:
         pass
     
-    manager = create_agent_manager()
+    manager = create_combined_agent_manager()
     
-    # Test simple query
+    # Test 1: Should FAIL - no session_id provided
+    print("\n🧪 Test 1: No session_id (should fail)")
     result = manager.process_query("Hello!")
-    print(f"Simple query result: {result}")
+    print(f"Result: {result['success']} - {result.get('error', 'No error')}")
     
-    # Test smart methodology insights
-    if manager.smart_logger:
-        insights = manager.get_smart_methodology_insights(days=1)
-        print(f"Smart methodology insights: {insights.get('success', False)}")
+    # Test 2: Should SUCCEED - session_id provided
+    print("\n🧪 Test 2: With session_id (should succeed)")
+    test_session = "test_combined_methodology_123"
+    result = manager.process_query("Hello!", session_id=test_session)
+    print(f"Result: {result['success']} - Response: {result.get('response', 'No response')[:50]}...")
+    print(f"Architecture: {result.get('agent_type', 'unknown')}")
+    
+    # Test 3: Follow-up query (should have automatic context from LangChain)
+    print("\n🧪 Test 3: Follow-up query (automatic LangChain context)")
+    result2 = manager.process_query("What can you help me with?", session_id=test_session)
+    print(f"Result: {result2['success']} - Has context: {result2.get('conversation_length', 0) > 2}")
+    print(f"Conversation length: {result2.get('conversation_length', 0)} messages")
+    
+    # Test 4: Complex research query (should use plan-execute workflow)
+    print("\n🧪 Test 4: Complex research query (plan-execute workflow)")
+    result3 = manager.process_query("Who is Per-Olof Arnäs and what are his research areas?", session_id=test_session)
+    print(f"Result: {result3['success']} - Architecture: {result3.get('architecture', 'unknown')}")
+    print(f"Response type: {result3.get('response_type', 'unknown')}")
     
     # Test health check
     health = manager.health_check()
-    print(f"Health check status: {health['status']}")
-    
-    print("✅ SMART METHODOLOGY AgentManager test completed!")
-    print("🧠 Key improvements:")
-    print("  - LLM-powered query analysis and categorization")
-    print("  - Intelligent tool effectiveness assessment")
-    print("  - Smart follow-up analysis and optimization")
-    print("  - Dynamic pattern recognition without hard-coded rules")
-    print("  - Streams complete gracefully before any cleanup")
-    print("  - No CancelledError exceptions in LangSmith")
-    print("  - Production-ready async architecture with smart learning")
+    print(f"\n🏥 Health check status: {health['status']}")
+    print

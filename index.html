@@ -569,12 +569,13 @@
                     <i class="fas fa-robot"></i>
                 </div>
                 <div class="message-content">
-                    <p>Hello! I'm your research publications assistant. I can help you:</p>
+                    <p>Hello! I'm your research publications assistant with persistent conversation memory. I can help you:</p>
                     <p>• Search for publications by author</p>
                     <p>• Find papers on specific topics</p>
                     <p>• Get publication statistics</p>
                     <p>• Compare publication counts between researchers</p>
-                    <p><strong>Try asking:</strong> "How many papers has [author name] published?" or "Find articles about machine learning"</p>
+                    <p><strong>Try asking:</strong> "How many papers has [author name] published?" followed by "What are his main research areas?"</p>
+                    <p><em>I'll remember our conversation throughout this session!</em></p>
                 </div>
             </div>
 
@@ -628,8 +629,8 @@
             constructor() {
                 this.isProcessing = false;
                 
-                // Generate unique session ID with timestamp
-                this.sessionId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                // 🎯 FIXED: Get or create session ID - persists for entire page session
+                this.sessionId = this.getOrCreateSessionId();
                 
                 this.messageInput = document.getElementById('messageInput');
                 this.sendButton = document.getElementById('sendButton');
@@ -644,7 +645,28 @@
                 this.initializeEventListeners();
                 this.checkSystemStatus();
                 
-                console.log('🆔 Local session:', this.sessionId);
+                console.log('🆔 Using session ID:', this.sessionId);
+                console.log('🧠 Session will persist until page reload or clear button');
+            }
+            
+            // 🎯 NEW: Session ID management
+            getOrCreateSessionId() {
+                // Check if we already have a session ID for this page load
+                if (!window.currentSessionId) {
+                    window.currentSessionId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    console.log('🆔 Generated new session ID:', window.currentSessionId);
+                } else {
+                    console.log('🆔 Reusing existing session ID:', window.currentSessionId);
+                }
+                return window.currentSessionId;
+            }
+            
+            // 🎯 NEW: Helper to generate fresh session ID (used by clear button)
+            generateNewSessionId() {
+                window.currentSessionId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                this.sessionId = window.currentSessionId;
+                console.log('🆔 Generated new session ID after clear:', this.sessionId);
+                return this.sessionId;
             }
             
             configureMarkdown() {
@@ -717,12 +739,14 @@
                 this.showProcessing('🔍 Processing your query...');
 
                 try {
+                    console.log('📤 Sending message with session ID:', this.sessionId);
+                    
                     const response = await fetch('/chat/respond', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
                             message: message,
-                            session_id: this.sessionId
+                            session_id: this.sessionId  // 🎯 CONSISTENT session ID
                         })
                     });
 
@@ -731,13 +755,14 @@
                     }
 
                     const data = await response.json();
+                    
+                    console.log('📥 Response received for session:', data.session_id);
 
                     this.hideProcessing();
 
                     if (data.response_content && data.response_content.trim()) {
                         this.addMessage('assistant', data.response_content);
-                        // Memory is now managed automatically by the backend
-                        console.log('✅ Response received, memory managed automatically');
+                        console.log('✅ Message processed successfully, memory should be preserved');
                     } else {
                         this.addMessage('assistant', 'I didn\'t generate a response. Please try again.');
                     }
@@ -746,6 +771,7 @@
                     this.hideProcessing();
                     this.showError('Error: ' + error.message);
                     this.addMessage('assistant', 'Something went wrong while processing your request.');
+                    console.error('❌ Request failed:', error);
                 }
             }
             
@@ -838,6 +864,7 @@
             }
         }
         
+        // 🎯 UPDATED: Clear conversation with proper session management
         async function clearConversation() {
             if (!confirm('Are you sure you want to clear this conversation?')) {
                 return;
@@ -845,6 +872,8 @@
             
             try {
                 const app = window.chatApp;
+                
+                console.log('🗑️ Clearing conversation for session:', app.sessionId);
                 
                 // Call the backend clear-memory endpoint
                 const response = await fetch('/chat/clear-memory', {
@@ -858,22 +887,23 @@
                     const messages = document.querySelectorAll('.message:not(.message:first-child)');
                     messages.forEach(msg => msg.remove());
                     
-                    // Generate new session ID
-                    app.sessionId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                    console.log('🆔 New session ID after clear:', app.sessionId);
+                    // 🎯 FIXED: Generate new session ID properly
+                    const newSessionId = app.generateNewSessionId();
+                    console.log('🆔 New session started:', newSessionId);
                     
                     // Add confirmation message
                     app.addMessage('system', '✅ New conversation started. Previous context cleared.');
                     
                     console.log('✅ Conversation cleared successfully');
                 } else {
-                    throw new Error('Failed to clear memory on server');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to clear memory on server');
                 }
                 
             } catch (error) {
                 console.error('❌ Clear conversation failed:', error);
                 const app = window.chatApp;
-                app.addMessage('system', '⚠️ Failed to clear memory. You may need to refresh the page.');
+                app.addMessage('system', '⚠️ Failed to clear memory: ' + error.message);
             }
         }
         
@@ -883,12 +913,14 @@
                 const status = await response.json();
                 
                 alert(`System Status:
-• Elasticsearch: ${status.elasticsearch_connected ? '✅ Connected' : '❌ Disconnected'}
 • System Ready: ${status.system_ready ? '✅ Yes' : '❌ No'}
-• Queries Processed: ${status.query_stats.total_queries || 0}
-• Success Rate: ${status.query_stats.successful_queries || 0}/${status.query_stats.total_queries || 0}`);
+• Architecture: ${status.architecture || 'Unknown'}
+• Session ID: ${window.chatApp.sessionId}
+• Memory Type: ${status.memory?.type || 'Unknown'}
+• Active Sessions: ${status.memory?.conversation_sessions || 0}
+• Queries Processed: ${status.statistics?.total_queries || 0}`);
             } catch (error) {
-                alert('Failed to fetch system status');
+                alert('Failed to fetch system status: ' + error.message);
             }
         }
         
