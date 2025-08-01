@@ -85,26 +85,22 @@ class Act(BaseModel):
 
 def setup_minimal_langsmith(frontend_session_id: str = None):
     """
-    CRITICAL FIX: Minimal LangSmith setup with consistent session ID.
-    Ensures all traces within a conversation are grouped together.
+    BEST PRACTICE: Use one main project with session metadata for organization.
+    Based on LangSmith recommendations for session management.
     """
     load_dotenv()
     
-    # Generate a consistent project name based on frontend session ID
-    if frontend_session_id:
-        project_name = f"research-agent-{frontend_session_id}"
-        session_name = frontend_session_id
-    else:
-        project_name = "research-agent-session-fixed"
-        session_name = "default-session"
+    # BEST PRACTICE: Use one main project name with session metadata
+    project_name = "research-agent-conversations"  # Single project for all conversations
+    session_name = frontend_session_id or "default-session"
     
-    # Set LangSmith environment variables with session consistency
+    # Set LangSmith environment variables following best practices
     langsmith_config = {
         "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2", "true"),
         "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
         "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY"),
-        "LANGCHAIN_PROJECT": project_name,  # Use session-specific project name
-        "LANGCHAIN_SESSION": session_name  # Set consistent session ID
+        "LANGCHAIN_PROJECT": project_name,  # Single project for all conversations
+        "LANGCHAIN_SESSION": session_name   # Session ID for thread management
     }
     
     # Apply configuration
@@ -123,8 +119,8 @@ def setup_minimal_langsmith(frontend_session_id: str = None):
             api_url=os.getenv("LANGCHAIN_ENDPOINT"),
             api_key=os.getenv("LANGCHAIN_API_KEY")
         )
-        print(f"✅ LangSmith configured with session ID: {frontend_session_id}")
-        print(f"📊 Project: {project_name}")
+        print(f"✅ LangSmith configured - Project: {project_name}")
+        print(f"🔗 Session: {frontend_session_id}")
         return client
     except Exception as e:
         print(f"❌ LangSmith configuration error: {e}")
@@ -290,15 +286,17 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             # Execute WITHOUT callbacks but with session metadata
             agent_executor = create_react_agent(llm, tools, prompt=execution_prompt)
             
-            # Enhanced config with session tracking
+            # Enhanced config with session tracking following LangSmith best practices
             config = {
                 "metadata": {
                     "step": "session_cached_execute",
                     "task": task,
                     "frontend_session_id": frontend_session_id,
+                    "session_id": frontend_session_id,  # BEST PRACTICE: Session metadata
                     "step_number": len(past_steps) + 1,
                     "langsmith_session": frontend_session_id,
-                    "workflow_reused": True
+                    "workflow_reused": True,
+                    "conversation_turn": len(past_steps) + 1
                 },
                 "tags": [
                     f"session-{frontend_session_id}",
@@ -418,11 +416,12 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             replanner_prompt_obj = ChatPromptTemplate.from_template(replanning_prompt)
             replanner = replanner_prompt_obj | replanner_llm.with_structured_output(Act)
             
-            # Enhanced config with session tracking
+            # Enhanced config with session tracking following LangSmith best practices
             config = {
                 "metadata": {
                     "step": "session_cached_replanning",
                     "frontend_session_id": frontend_session_id,
+                    "session_id": frontend_session_id,  # BEST PRACTICE: Session metadata
                     "langsmith_session": frontend_session_id,
                     "workflow_reused": True
                 },
@@ -688,12 +687,13 @@ class ResearchAgent:
             "conversation_history": conversation_history or []
         }
         
-        # Enhanced config for session continuity
+        # Enhanced config for session continuity following LangSmith best practices
         config = {
             "recursion_limit": self.recursion_limit,
             "metadata": {
                 "query": query,
                 "frontend_session_id": frontend_session_id,
+                "session_id": frontend_session_id,  # BEST PRACTICE: Session metadata for threads
                 "index_name": self.index_name,
                 "agent_type": "session_cached",
                 "langsmith_session_id": frontend_session_id,
@@ -707,8 +707,8 @@ class ResearchAgent:
                 f"turn-{len(conversation_history or []) + 1}",
                 "workflow-cached" if self.session_id == frontend_session_id else "workflow-new"
             ],
-            # Consistent run naming for LangSmith
-            "run_name": f"Turn-{len(conversation_history or []) + 1}-Session-{frontend_session_id}"
+            # BEST PRACTICE: Consistent run naming for conversation threads
+            "run_name": f"Conversation-Turn-{len(conversation_history or []) + 1}"
         }
         
         # Stream with session continuity
