@@ -32,11 +32,28 @@ class UnifiedSearchTool(BaseTool):
     
     name: str = "unified_search"
     description: str = (
-        "A comprehensive search tool for academic research publications. "
-        "Searches across titles, abstracts, authors, and keywords with advanced filtering options. "
-        "Supports filtering by year ranges, publication types, open access status, and more. "
-        "Results include paper metadata with truncated abstracts for efficient processing. "
-        "Input should be a search query and optional filters."
+        "Search tool for CHALMERS UNIVERSITY RESEARCH DATABASE ONLY. "
+        "IMPORTANT: This database contains ONLY publications where at least one author is affiliated with Chalmers. "
+        "It does NOT contain all global academic publications. "
+        "\n"
+        "CAPABILITIES:\n"
+        "- Find papers by keywords, authors, years, or publication types\n"
+        "- Return matching papers with their metadata\n"
+        "- Sort by relevance, year, or title\n"
+        "\n"
+        "LIMITATIONS - This tool CANNOT:\n"
+        "- Count total publications per author (no aggregation)\n"
+        "- Rank authors by publication count\n"
+        "- Find 'top' or 'most published' researchers\n"
+        "- Compare publication counts between entities\n"
+        "\n"
+        "For 'most published' queries, you can only sample some authors from search results. "
+        "Acknowledge this limitation in your response.\n"
+        "\n"
+        "EXAMPLES:\n"
+        "- Good: 'Find papers by John Doe' → search with author filter\n"
+        "- Good: 'Recent AI papers' → search with query and year filter\n"  
+        "- Limited: 'Top 10 ML researchers' → can only show active researchers from search results"
     )
     args_schema: Type[BaseModel] = UnifiedSearchInput
     handle_tool_error: bool = True
@@ -59,7 +76,7 @@ class UnifiedSearchTool(BaseTool):
         fields_to_search: List[str] = None,
         max_results: int = 10,
         offset: int = 0,
-        field_selection: str = "default",
+        field_selection: str = "standard",
         run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
         """
@@ -101,10 +118,36 @@ class UnifiedSearchTool(BaseTool):
             # Check if no results found and provide helpful suggestions
             if not search_results.results and search_results.pagination.total == 0:
                 suggestions = self._generate_search_suggestions(search_input)
+                
+                # Add specific guidance for Nature/high-impact journal searches
+                journal_guidance = ""
+                if search_input.filters and search_input.filters.sources:
+                    journal_names = search_input.filters.sources
+                    if any('nature' in j.lower() for j in journal_names):
+                        journal_guidance = (
+                            "\n\nNOTE: 'Nature' publications are rare at Chalmers. "
+                            "Try: 1) Remove source filter to find ML papers in ANY journal, "
+                            "2) Search for 'Nature Communications' or 'Nature Machine Intelligence', "
+                            "3) Use get_database_info(info_type='sources') to see actual journal names."
+                        )
+                
+                # Create a helpful fallback search suggestion
+                fallback_suggestion = {
+                    "try_this_search": {
+                        "query": query,
+                        "filters": {},  # Remove all filters
+                        "sort_by": "year_desc",
+                        "max_results": 10
+                    },
+                    "explanation": "Search without filters to see what's actually available"
+                }
+                
                 error_message = (
                     f"No results found for query '{query}'. "
                     f"Suggestions: {', '.join(suggestions)}. "
                     "Try modifying your search parameters."
+                    f"{journal_guidance}"
+                    f"\n\nRECOMMENDED NEXT STEP: {json.dumps(fallback_suggestion, indent=2)}"
                 )
                 raise ValueError(error_message)
             
@@ -247,14 +290,22 @@ class UnifiedSearchTool(BaseTool):
             return None
     
     def _extract_authors(self, persons_data: Any) -> List[Author]:
-        """Extract minimal author information from Persons array."""
+        """Extract minimal author information from Persons array.
+        
+        NOTE: The Persons field is very large with lots of nested data.
+        We only extract the essentials to keep responses manageable.
+        """
         authors = []
         
         # Handle case where persons_data might not be a list
         if not persons_data or not isinstance(persons_data, list):
             return authors
         
-        for person in persons_data:
+        # Limit processing to first 20 persons to avoid huge processing
+        # (some papers have 100+ authors)
+        persons_to_process = persons_data[:20] if len(persons_data) > 20 else persons_data
+        
+        for person in persons_to_process:
             try:
                 # Use our utility to extract minimal info
                 author_info = extract_author_info(person)
@@ -273,7 +324,7 @@ class UnifiedSearchTool(BaseTool):
         # Sort by order
         authors.sort(key=lambda a: a.order)
         
-        # Limit number of authors for very long lists
+        # Limit number of authors for display
         max_authors = 10  # Could make this configurable
         if len(authors) > max_authors:
             # Keep first n-1 authors and add "et al." indicator
@@ -281,6 +332,13 @@ class UnifiedSearchTool(BaseTool):
             # Add a special author entry to indicate truncation
             authors.append(Author(
                 name="et al.",
+                role="Author",
+                order=999
+            ))
+        elif len(persons_data) > 20:
+            # We didn't process all persons, add indicator
+            authors.append(Author(
+                name=f"et al. ({len(persons_data) - 20} more)",
                 role="Author",
                 order=999
             ))
@@ -324,13 +382,22 @@ class UnifiedSearchTool(BaseTool):
         if search_input.fields_to_search != ["all"]:
             suggestions.append("Search in all fields instead of specific fields")
             
-        # General suggestions
+        # Context-aware suggestions for Chalmers database
         if not suggestions:
             suggestions.extend([
                 "Use more general search terms",
                 "Check spelling of author names or technical terms",
-                "Remove filters to broaden the search"
+                "Remove filters to broaden the search",
+                "Remember: this database only contains Chalmers-affiliated publications"
             ])
+            
+        # Add task-specific guidance
+        if search_input.query and ("rank" in search_input.query.lower() or "most" in search_input.query.lower() or "top" in search_input.query.lower()):
+            suggestions.append("Note: This tool cannot rank or count publications. Consider searching broadly and sampling results.")
+            
+        # Add source-specific suggestions
+        if search_input.filters and search_input.filters.sources:
+            suggestions.append("For journal names, try partial matches (e.g., 'IEEE' instead of full name)")
             
         return suggestions
     

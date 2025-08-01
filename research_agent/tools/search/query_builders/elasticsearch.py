@@ -61,7 +61,7 @@ class ElasticsearchQueryBuilder:
     def _get_source_fields(field_selection: FieldSelection) -> List[str]:
         """Get the list of fields to retrieve based on selection strategy."""
         # Get base fields from preset
-        fields = FIELD_PRESETS.get(field_selection, FIELD_PRESETS[FieldSelection.DEFAULT]).copy()
+        fields = FIELD_PRESETS.get(field_selection, FIELD_PRESETS[FieldSelection.STANDARD]).copy()
         
         # Special handling for nested fields
         # We always need to get full Persons/Organizations if requested,
@@ -219,8 +219,8 @@ class ElasticsearchQueryBuilder:
                 {"Year": {"order": "asc", "missing": "_last"}},
                 {"_score": {"order": "desc"}}
             ]
-        elif sort_value == SortBy.TITLE_ASC.value:
-            return [{"Title.keyword": {"order": "asc"}}]
+        elif sort_value == SortBy.NAME_ASC.value:
+            return [{"Title": {"order": "asc"}}]
         elif sort_value == SortBy.CITATIONS_DESC.value:
             return [
                 {"Metrics.CitationCount": {"order": "desc", "missing": "_last"}},
@@ -231,7 +231,7 @@ class ElasticsearchQueryBuilder:
             return [{"_score": {"order": "desc"}}]
     
     @staticmethod
-    def build_document_query(document_id: str, field_selection: FieldSelection = FieldSelection.FULL) -> Dict[str, Any]:
+    def build_document_query(document_id: str, field_selection: FieldSelection = FieldSelection.FULL_AND_SLOW) -> Dict[str, Any]:
         """Build query to get a single document by ID."""
         return {
             "query": {

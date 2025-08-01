@@ -2,7 +2,10 @@
 from typing import List, Dict, Any, Optional
 from elasticsearch import Elasticsearch
 
-from .unified_search import UnifiedSearchTool
+from .persons import PersonsSearchTool
+from .projects import ProjectsSearchTool
+from .organizations import OrganizationsSearchTool
+from .publications import PublicationsSearchTool
 from ..config.settings import settings
 
 
@@ -30,11 +33,11 @@ def get_all_tools(
     
     # Initialize all tools
     tools = [
-        UnifiedSearchTool(es_client=es_client, index_name=index_name),
-        # Future tools will be added here:
-        # GetDocumentTool(es_client=es_client, index_name=index_name),
-        # AggregateStatsTool(es_client=es_client, index_name=index_name),
-        # etc.
+        # Index-specific tools only - unified_search removed to avoid confusion
+        PublicationsSearchTool(es_client=es_client, index_name="research-publications-static"),
+        PersonsSearchTool(es_client=es_client, index_name="research-persons-static"),
+        ProjectsSearchTool(es_client=es_client, index_name="research-projects-static"),
+        OrganizationsSearchTool(es_client=es_client, index_name="research-organizations-static"),
     ]
     
     return tools

@@ -1,10 +1,8 @@
 """
-COMPLETE Enhanced workflow.py with Smart LLM-Powered Methodology Learning
-BUILDS ON: Your existing minimal callback workflow with LLM-powered learning integration
-ADDS: Smart methodology logging throughout the research process
-CLEANED: Removed redundant conversation context from planning
-REFACTORED: Moved prompts to separate TXT files for better maintainability
-UPDATED: Correct import paths for your project structure
+FIXED Enhanced workflow.py - Uses Frontend Session ID with Workflow Caching
+CRITICAL FIX: Maintains compiled workflows per session for LangSmith continuity
+REMOVED: Workflow recompilation that broke LangSmith session tracking
+ADDED: Workflow caching and reuse within sessions
 """
 
 from typing import Dict, Any, List, Optional, Literal
@@ -37,19 +35,18 @@ from ..prompts import (
 )
 
 # =============================================================================
-# STATE SCHEMA (UNCHANGED)
+# STATE SCHEMA - FIXED to use frontend session_id consistently
 # =============================================================================
 
 class PlanExecuteState(TypedDict):
-    """State schema with memory session tracking."""
+    """State schema with consistent frontend session tracking."""
     input: str
     plan: List[str]
     past_steps: List[tuple[str, str]]
     response: Optional[str]
     
-    # Memory tracking
-    session_id: Optional[str]
-    memory_session_id: Optional[str]
+    # FIXED: Use single session_id from frontend consistently
+    session_id: Optional[str]  # This comes from frontend and is used for ALL memory operations
     conversation_history: Optional[List[Dict[str, Any]]]
 
 # =============================================================================
@@ -83,22 +80,31 @@ class Act(BaseModel):
     )
 
 # =============================================================================
-# MINIMAL LANGSMITH SETUP - NO PROBLEMATIC CALLBACKS
+# FIXED LANGSMITH SETUP WITH SESSION CONSISTENCY
 # =============================================================================
 
-def setup_minimal_langsmith():
+def setup_minimal_langsmith(frontend_session_id: str = None):
     """
-    CRITICAL FIX: Minimal LangSmith setup without problematic callbacks.
-    Only sets environment variables, no callback handlers.
+    CRITICAL FIX: Minimal LangSmith setup with consistent session ID.
+    Ensures all traces within a conversation are grouped together.
     """
     load_dotenv()
     
-    # Set LangSmith environment variables
+    # Generate a consistent project name based on frontend session ID
+    if frontend_session_id:
+        project_name = f"research-agent-{frontend_session_id}"
+        session_name = frontend_session_id
+    else:
+        project_name = "research-agent-session-fixed"
+        session_name = "default-session"
+    
+    # Set LangSmith environment variables with session consistency
     langsmith_config = {
         "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2", "true"),
         "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
         "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY"),
-        "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT", "research-agent-smart-methodology")
+        "LANGCHAIN_PROJECT": project_name,  # Use session-specific project name
+        "LANGCHAIN_SESSION": session_name  # Set consistent session ID
     }
     
     # Apply configuration
@@ -112,59 +118,59 @@ def setup_minimal_langsmith():
         return None
     
     try:
-        # Test connection without creating callback handlers
+        # Test connection with session consistency
         client = Client(
             api_url=os.getenv("LANGCHAIN_ENDPOINT"),
             api_key=os.getenv("LANGCHAIN_API_KEY")
         )
-        print("✅ LangSmith environment configured with smart methodology tracking")
+        print(f"✅ LangSmith configured with session ID: {frontend_session_id}")
+        print(f"📊 Project: {project_name}")
         return client
     except Exception as e:
         print(f"❌ LangSmith configuration error: {e}")
         return None
 
 # =============================================================================
-# MAIN WORKFLOW CREATION WITH SMART METHODOLOGY LEARNING
+# MAIN WORKFLOW CREATION - FIXED SESSION CONSISTENCY
 # =============================================================================
 
-def create_research_workflow(es_client=None, index_name: str = "research-publications-static", session_id: str = None) -> StateGraph:
+def create_research_workflow(es_client=None, index_name: str = "research-publications-static", frontend_session_id: str = None) -> StateGraph:
     """
-    Create research workflow with SMART LLM-POWERED methodology learning.
-    BUILDS ON: Existing minimal callback workflow.
-    ADDS: Intelligent methodology observation and analysis throughout.
-    CLEANED: Removed redundant conversation context from planning.
-    REFACTORED: Uses external TXT prompt templates for better maintainability.
-    UPDATED: Correct import paths for your project structure.
+    FIXED: Create research workflow using frontend session_id consistently.
+    CRITICAL FIX: All memory operations AND LangSmith tracing use the same frontend session_id.
     """
     
-    # Setup minimal LangSmith (no callbacks)
-    langsmith_client = setup_minimal_langsmith()
+    # CRITICAL FIX: Setup LangSmith with the frontend session ID
+    langsmith_client = setup_minimal_langsmith(frontend_session_id)
     
     # Get tools
     if es_client:
         tools = get_all_tools(es_client=es_client, index_name=index_name)
-        print(f"✅ SMART METHODOLOGY workflow: Initialized {len(tools)} research tools")
+        print(f"✅ FIXED workflow: Initialized {len(tools)} research tools")
     else:
         tools = get_all_tools()
-        print(f"✅ SMART METHODOLOGY workflow: Initialized {len(tools)} research tools")
+        print(f"✅ FIXED workflow: Initialized {len(tools)} research tools")
     
     # Initialize integrated memory
     integrated_memory = IntegratedMemoryManager(memory_type="buffer_window")
-    print("🧠 SMART METHODOLOGY workflow: Integrated memory initialized")
+    print("🧠 FIXED workflow: Integrated memory initialized")
     
-    # ENHANCED: Initialize smart methodology logger
+    # Initialize smart methodology logger
     standard_logger = StandardMethodologyLogger()
-    print("🧠 Smart Methodology Learning system active with LLM analysis")
+    print("🧠 Smart Methodology Learning system active with session consistency")
     
-    # CRITICAL FIX: Create LLMs WITHOUT callback handlers
+    # CRITICAL FIX: Create LLMs with session-aware metadata
     try:
         llm = ChatLiteLLM(
             model="anthropic/claude-sonnet-4",
             api_key=os.getenv("LITELLM_API_KEY"),
             api_base=os.getenv("LITELLM_BASE_URL"),
             temperature=0,
-            # REMOVED: callbacks=callbacks,  # This was causing async issues
-            metadata={"component": "smart_methodology_main_llm", "session_id": session_id}
+            metadata={
+                "component": "session_cached_main_llm", 
+                "frontend_session_id": frontend_session_id,
+                "session_group": f"research-session-{frontend_session_id}"
+            }
         )
         
         replanner_llm = ChatLiteLLM(
@@ -172,49 +178,57 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             api_key=os.getenv("LITELLM_API_KEY"),
             api_base=os.getenv("LITELLM_BASE_URL"),
             temperature=0,
-            # REMOVED: callbacks=callbacks,  # This was causing async issues
-            metadata={"component": "smart_methodology_replanner_llm", "session_id": session_id}
+            metadata={
+                "component": "session_cached_replanner_llm", 
+                "frontend_session_id": frontend_session_id,
+                "session_group": f"research-session-{frontend_session_id}"
+            }
         )
-        print("✅ LLMs initialized WITHOUT problematic callbacks + smart methodology tracking")
+        print(f"✅ LLMs initialized with session consistency: {frontend_session_id}")
         
     except Exception as e:
         print(f"❌ Error initializing LLMs: {e}")
         raise
     
     # =============================================================================
-    # ENHANCED WORKFLOW NODES WITH SMART METHODOLOGY LEARNING
+    # FIXED WORKFLOW NODES - USE FRONTEND SESSION_ID CONSISTENTLY
     # =============================================================================
     
     def plan_step(state: PlanExecuteState):
-        """CLEANED planning step using external TXT prompt template."""
+        """FIXED planning step using frontend session_id consistently."""
         try:
             query = state["input"]
             conversation_history = state.get("conversation_history", [])
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            # CRITICAL FIX: Use frontend session_id directly, don't generate new one
+            frontend_session_id = state.get("session_id")
             
-            print(f"📋 SMART METHODOLOGY Planning for query: {query}")
-            print(f"🧠 Memory session ID: {memory_session_id}")
+            if not frontend_session_id:
+                # Fallback only if no frontend session provided
+                frontend_session_id = f"fallback_{int(time.time())}"
+                print("⚠️ No frontend session_id provided, using fallback")
             
-            # ENHANCED: Smart query analysis with rich context
+            print(f"📋 FIXED Planning for query: {query}")
+            print(f"🔗 Using frontend session ID: {frontend_session_id}")
+            
+            # Smart query analysis with rich context
             is_followup = len(conversation_history) > 0
             previous_context = ""
             if is_followup and conversation_history:
-                # Get richer context for LLM analysis
                 prev_user_messages = [msg for msg in conversation_history if msg.get('role') == 'user']
                 prev_ai_messages = [msg for msg in conversation_history if msg.get('role') == 'assistant']
                 
                 if prev_user_messages and prev_ai_messages:
                     previous_context = f"Previous query: {prev_user_messages[-1].get('content', '')}\nPrevious response: {prev_ai_messages[-1].get('content', '')[:300]}"
             
-            # SMART LOGGING: Intelligent query analysis
+            # SMART LOGGING: Use frontend session_id
             standard_logger.log_query_start(
-                memory_session_id, query, is_followup, previous_context
+                frontend_session_id, query, is_followup, previous_context
             )
             
             # Format tool information
             tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
             
-            # REFACTORED: Use external TXT prompt template
+            # Use external TXT prompt template
             planning_prompt_text = PLANNING_PROMPT_TEMPLATE.format(
                 query=query,
                 tool_descriptions=tool_descriptions
@@ -226,29 +240,31 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             
             plan = planner.invoke({})
             
-            print(f"📋 Created plan with {len(plan.steps)} steps:")
+            print(f"📋 Created plan with {len(plan.steps)} steps")
             for i, step in enumerate(plan.steps, 1):
                 print(f"  {i}. {step}")
             
+            # CRITICAL FIX: Return the same frontend session_id, don't create new one
             return {
                 "plan": plan.steps,
-                "memory_session_id": memory_session_id
+                "session_id": frontend_session_id  # Keep the same frontend session_id
             }
             
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY planning: {e}")
+            print(f"❌ Error in FIXED planning: {e}")
             fallback_plan = [f"Research comprehensive information about: {query}"]
             return {
                 "plan": fallback_plan,
-                "memory_session_id": str(uuid.uuid4())
+                "session_id": state.get("session_id", f"fallback_{int(time.time())}")
             }
     
     def execute_step(state: PlanExecuteState):
-        """Execution step using external TXT prompt template."""
+        """FIXED execution step using frontend session_id consistently."""
         try:
             plan = state["plan"]
             past_steps = state.get("past_steps", [])
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            # CRITICAL FIX: Use the same frontend session_id for memory operations
+            frontend_session_id = state.get("session_id")
             
             if not plan:
                 print("⚠️ No plan available for execution")
@@ -257,38 +273,44 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             task = plan[0]
             original_query = state.get("input", "")
             
-            print(f"🔧 SMART METHODOLOGY Executing task: {task}")
+            print(f"🔧 FIXED Executing task: {task}")
+            print(f"🔗 Using frontend session ID for memory: {frontend_session_id}")
             
-            # Build execution context
-            research_context = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=5)
+            # CRITICAL FIX: Use frontend_session_id for memory operations
+            research_context = integrated_memory.get_research_context_summary(frontend_session_id, max_recent_steps=5)
             print(f"📋 Research context: {len(research_context):,} chars")
             
-            # REFACTORED: Use external TXT prompt template
+            # Use external TXT prompt template
             execution_prompt = EXECUTION_PROMPT_TEMPLATE.format(
                 original_query=original_query,
                 task=task,
                 research_context=research_context
             )
             
-            # CRITICAL FIX: Execute WITHOUT callbacks
+            # Execute WITHOUT callbacks but with session metadata
             agent_executor = create_react_agent(llm, tools, prompt=execution_prompt)
             
-            # Minimal config without problematic callbacks
+            # Enhanced config with session tracking
             config = {
                 "metadata": {
-                    "step": "smart_methodology_execute",
+                    "step": "session_cached_execute",
                     "task": task,
-                    "session_id": session_id,
-                    "memory_session_id": memory_session_id,
-                    "step_number": len(past_steps) + 1
-                }
-                # REMOVED: "callbacks": callbacks  # This was causing async issues
+                    "frontend_session_id": frontend_session_id,
+                    "step_number": len(past_steps) + 1,
+                    "langsmith_session": frontend_session_id,
+                    "workflow_reused": True
+                },
+                "tags": [
+                    f"session-{frontend_session_id}",
+                    f"step-{len(past_steps) + 1}",
+                    "execution",
+                    "workflow-cached"
+                ]
             }
             
-            # ENHANCED: Track execution with timing
+            # Track execution with timing
             execution_start = time.time()
             
-            # Execute with minimal callback approach
             try:
                 result = agent_executor.invoke({
                     "messages": [HumanMessage(content=f"Execute this research task: {task}")]
@@ -297,33 +319,33 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 response_content = result["messages"][-1].content
                 execution_time = time.time() - execution_start
                 
-                print(f"✅ SMART METHODOLOGY Task completed: {len(response_content):,} chars in {execution_time:.1f}s")
+                print(f"✅ FIXED Task completed: {len(response_content):,} chars in {execution_time:.1f}s")
                 
             except Exception as exec_error:
                 print(f"❌ Execution error: {exec_error}")
                 response_content = f"Error executing task '{task}': {str(exec_error)}"
                 execution_time = time.time() - execution_start
             
-            # SMART LOGGING: Intelligent tool effectiveness analysis
+            # SMART LOGGING: Use frontend session_id
             success = len(response_content) > 100 and "error" not in response_content.lower()
             
             standard_logger.log_tool_usage(
-                memory_session_id,
-                "research_agent",  # Could be more specific about which tools were used
+                frontend_session_id,
+                "research_agent", 
                 task,
                 success,
-                response_content,  # Full result for LLM analysis
+                response_content,
                 f"Execution time: {execution_time:.1f}s, Steps completed: {len(past_steps) + 1}, Success: {success}"
             )
             
-            # Store FULL result
+            # CRITICAL FIX: Store FULL result using frontend session_id
             reference_id = integrated_memory.store_research_step(
-                memory_session_id,
+                frontend_session_id,  # Use frontend session_id for memory consistency
                 task,
                 response_content
             )
             
-            print(f"📚 SMART METHODOLOGY Stored result as: {reference_id}")
+            print(f"📚 FIXED Stored result as: {reference_id} (session: {frontend_session_id})")
             
             updated_past_steps = past_steps + [(task, f"COMPLETE research stored as {reference_id}")]
             
@@ -331,23 +353,23 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
         
         except Exception as e:
             error_response = f"Error executing task: {str(e)}"
-            print(f"❌ Error in SMART METHODOLOGY execute_step: {e}")
+            print(f"❌ Error in FIXED execute_step: {e}")
             
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            frontend_session_id = state.get("session_id")
             task = plan[0] if plan else "unknown_task"
             
-            # SMART LOGGING: Log tool failure
+            # SMART LOGGING: Use frontend session_id
             standard_logger.log_tool_usage(
-                memory_session_id,
+                frontend_session_id,
                 "research_agent",
                 task,
-                False,  # Failed
+                False,
                 error_response,
                 f"Tool execution failed with error: {str(e)}"
             )
             
             try:
-                integrated_memory.store_research_step(memory_session_id, task, error_response)
+                integrated_memory.store_research_step(frontend_session_id, task, error_response)
             except Exception as mem_error:
                 print(f"⚠️ Could not store error in memory: {mem_error}")
             
@@ -355,23 +377,24 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
             return {"past_steps": updated_past_steps}
     
     def replan_step(state: PlanExecuteState):
-        """CLEANED replanning step using external TXT prompt template."""
+        """FIXED replanning step using frontend session_id consistently."""
         try:
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            # CRITICAL FIX: Use frontend session_id for all memory operations
+            frontend_session_id = state.get("session_id")
             original_plan = state.get("plan", [])
             past_steps = state.get("past_steps", [])
             
-            print(f"🔄 SMART METHODOLOGY Replanning for session: {memory_session_id}")
+            print(f"🔄 FIXED Replanning for frontend session: {frontend_session_id}")
             
-            # ENHANCED: Track session timing for comprehensive analysis
+            # Track session timing
             session_start_time = getattr(replan_step, 'session_start_time', None)
             if session_start_time is None:
                 replan_step.session_start_time = time.time()
                 session_start_time = replan_step.session_start_time
             
-            # Get research context with full content for LLM analysis
+            # CRITICAL FIX: Get research context using frontend session_id
             research_summary = integrated_memory.get_research_context_summary(
-                memory_session_id, 
+                frontend_session_id,  # Use frontend session_id consistently
                 max_recent_steps=3
             )
             
@@ -384,54 +407,56 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 else:
                     research_summary = "No research completed yet."
             
-            # REFACTORED: Use external TXT prompt template
+            # Use external TXT prompt template
             replanning_prompt = REPLANNING_PROMPT_TEMPLATE.format(
                 original_objective=state["input"],
                 original_plan=original_plan,
                 research_summary=research_summary
             )
             
-            # Create replanner WITHOUT callbacks
+            # Create replanner WITHOUT callbacks but with session metadata
             replanner_prompt_obj = ChatPromptTemplate.from_template(replanning_prompt)
             replanner = replanner_prompt_obj | replanner_llm.with_structured_output(Act)
             
-            # Minimal config
+            # Enhanced config with session tracking
             config = {
                 "metadata": {
-                    "step": "smart_methodology_replanning",
-                    "memory_session_id": memory_session_id,
-                    "session_id": session_id
-                }
-                # REMOVED: "callbacks": callbacks
+                    "step": "session_cached_replanning",
+                    "frontend_session_id": frontend_session_id,
+                    "langsmith_session": frontend_session_id,
+                    "workflow_reused": True
+                },
+                "tags": [
+                    f"session-{frontend_session_id}",
+                    "replanning",
+                    "workflow-cached"
+                ]
             }
             
-            # Execute replanner without callbacks
             try:
                 response = replanner.invoke({}, config=config)
             except Exception as replan_error:
                 print(f"❌ Replanner execution error: {replan_error}")
-                return {"response": f"Research completed with smart methodology tracking. Error in replanning: {str(replan_error)}"}
+                return {"response": f"Research completed with session consistency. Error in replanning: {str(replan_error)}"}
             
             if response.action_type == "response":
-                # SMART LOGGING: Comprehensive session completion analysis
+                # SMART LOGGING: Use frontend session_id for completion analysis
                 execution_time = time.time() - session_start_time
-                
-                # Count actual replanning events
                 replanning_count = len([step for step in past_steps if "replan" in step[1].lower()])
                 
-                # Assess final success intelligently
+                # Assess final success
                 final_success = "success"
                 if "partial" in response.response.lower() or "incomplete" in response.response.lower():
                     final_success = "partial"
                 elif "error" in response.response.lower() or "failed" in response.response.lower():
                     final_success = "failed"
                 
-                # Get comprehensive research results for LLM analysis
-                comprehensive_data = integrated_memory.get_comprehensive_final_response_data(memory_session_id)
-                full_results = "\n\n".join(comprehensive_data.get('full_results', []))  # ✅ ALL results
+                # CRITICAL FIX: Get comprehensive results using frontend session_id
+                comprehensive_data = integrated_memory.get_comprehensive_final_response_data(frontend_session_id)
+                full_results = "\n\n".join(comprehensive_data.get('full_results', []))
                 
                 standard_logger.log_session_complete(
-                    memory_session_id,
+                    frontend_session_id,  # Use frontend session_id consistently
                     state["input"],
                     len(past_steps),
                     replanning_count,
@@ -440,13 +465,9 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                     full_results
                 )
                 
-                # CLEANED: Create comprehensive final response with NO truncation or technical footers
-                enhanced_response = response.response
-                
-                return {"response": enhanced_response}
+                return {"response": response.response}
             else:
-                # SMART LOGGING: Intelligent replanning analysis
-                # Determine replanning reason intelligently
+                # SMART LOGGING: Use frontend session_id for replanning analysis
                 if len(past_steps) == 0:
                     replanning_reason = "Initial planning phase - setting up research approach"
                 elif "no research steps completed yet" in research_summary.lower():
@@ -456,32 +477,31 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
                 else:
                     replanning_reason = "Research incomplete - expanding investigation scope"
                 
-                # Describe approaches for LLM analysis
                 previous_approach = f"Plan with {len(original_plan)} steps: {', '.join(original_plan[:2])}{'...' if len(original_plan) > 2 else ''}"
                 new_approach = f"Revised plan with {len(response.steps or [])} steps: {', '.join((response.steps or [])[:2])}{'...' if len(response.steps or []) > 2 else ''}"
                 
                 standard_logger.log_replanning_event(
-                    memory_session_id,
+                    frontend_session_id,  # Use frontend session_id consistently
                     state["input"],
                     len(past_steps) + 1,
                     replanning_reason,
                     previous_approach,
                     new_approach,
-                    research_summary  # Full context for LLM analysis
+                    research_summary
                 )
                 
-                print(f"🔄 SMART METHODOLOGY replanner: Continuing with more steps")
+                print(f"🔄 FIXED replanner: Continuing with more steps")
                 return {"plan": response.steps or []}
                 
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY replanning: {e}")
+            print(f"❌ Error in FIXED replanning: {e}")
             
-            memory_session_id = state.get("memory_session_id", str(uuid.uuid4()))
+            frontend_session_id = state.get("session_id")
             try:
-                fallback_summary = integrated_memory.get_research_context_summary(memory_session_id, max_recent_steps=2)
+                # CRITICAL FIX: Use frontend session_id for fallback summary
+                fallback_summary = integrated_memory.get_research_context_summary(frontend_session_id, max_recent_steps=2)
                 
                 if fallback_summary != "No research steps completed yet.":
-                    # CLEANED: Clean fallback response without technical footer
                     fallback_response = f"""Based on research completed:
 
 {fallback_summary[:1000]}{"..." if len(fallback_summary) > 1000 else ""}"""
@@ -499,7 +519,7 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
         if state.get("response"):
             return "__end__"
         else:
-            print("🔄 SMART METHODOLOGY: Continuing to agent execution")
+            print("🔄 FIXED: Continuing to agent execution")
             return "agent"
     
     # =============================================================================
@@ -523,35 +543,37 @@ def create_research_workflow(es_client=None, index_name: str = "research-publica
         ["agent", END]
     )
     
-    print("🧠 SMART METHODOLOGY workflow constructed with LLM-powered learning + external TXT prompts")
+    print("🔗 FIXED workflow constructed with session caching support")
     
     return workflow
 
 # =============================================================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS - FIXED SESSION CONSISTENCY
 # =============================================================================
 
-def compile_research_agent(es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, session_id: str = None):
-    """Compile research agent with smart methodology learning."""
-    workflow = create_research_workflow(es_client, index_name, session_id)
+def compile_research_agent(es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, frontend_session_id: str = None):
+    """FIXED: Compile research agent with frontend session consistency."""
+    workflow = create_research_workflow(es_client, index_name, frontend_session_id)
     app = workflow.compile()
     return app
 
-def run_research_query(query: str, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, stream: bool = False, conversation_history: Optional[List[Dict]] = None, session_id: str = None) -> Dict[str, Any]:
-    """Run research query using SMART METHODOLOGY patterns."""
+def run_research_query(query: str, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50, stream: bool = False, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None) -> Dict[str, Any]:
+    """FIXED: Run research query using frontend session_id consistently."""
     
-    if not session_id:
-        session_id = str(uuid.uuid4())
+    # CRITICAL FIX: Use frontend session_id if provided, don't generate new one
+    if not frontend_session_id:
+        frontend_session_id = f"fallback_{str(uuid.uuid4())}"
+        print("⚠️ No frontend session_id provided, using fallback")
     
-    app = compile_research_agent(es_client, index_name, recursion_limit, session_id)
+    app = compile_research_agent(es_client, index_name, recursion_limit, frontend_session_id)
     
+    # CRITICAL FIX: Use frontend session_id in initial state
     initial_state = {
         "input": query,
         "plan": [],
         "past_steps": [],
         "response": None,
-        "session_id": session_id,
-        "memory_session_id": str(uuid.uuid4()),
+        "session_id": frontend_session_id,  # Use frontend session_id consistently
         "conversation_history": conversation_history or []
     }
     
@@ -559,12 +581,18 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         "recursion_limit": recursion_limit,
         "metadata": {
             "query": query,
-            "session_id": session_id,
+            "frontend_session_id": frontend_session_id,
             "index_name": index_name,
             "has_conversation_history": bool(conversation_history),
-            "agent_type": "smart_methodology"
+            "agent_type": "session_cached",
+            "langsmith_session": frontend_session_id
         },
-        "tags": ["smart_methodology_agent", "plan_execute", f"session_{session_id}"]
+        "tags": [
+            "session_cached_agent", 
+            "plan_execute", 
+            f"session-{frontend_session_id}",
+            f"turn-{len(conversation_history or []) + 1}"
+        ]
     }
     
     if stream:
@@ -579,68 +607,122 @@ def run_research_query(query: str, es_client=None, index_name: str = "research-p
         return result
 
 # =============================================================================
-# RESEARCH AGENT CLASS WITH SMART METHODOLOGY
+# RESEARCH AGENT CLASS - FIXED SESSION CACHING
 # =============================================================================
 
 class ResearchAgent:
-    """Research Agent using smart methodology learning."""
+    """FIXED: Research Agent that caches compiled workflows for session continuity."""
     
     def __init__(self, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50):
         self.es_client = es_client
         self.index_name = index_name
         self.recursion_limit = recursion_limit
         self.app = None
-        self.langsmith_client = setup_minimal_langsmith()
+        self.session_id = None  # Track which session this agent is compiled for
 
-    def _compile_agent(self, session_id: str = None):
-        """Compile agent with smart methodology learning."""
+    def _compile_agent(self, frontend_session_id: str = None):
+        """FIXED: Compile agent ONCE per session for continuity."""
+        print(f"🔨 Compiling agent for session: {frontend_session_id}")
+        
         self.app = compile_research_agent(
             self.es_client, 
             self.index_name, 
             self.recursion_limit,
-            session_id
+            frontend_session_id
         )
+        self.session_id = frontend_session_id
+        print(f"✅ Agent compiled and cached for session: {frontend_session_id}")
 
-    async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None):
-        """Stream query with smart methodology learning."""
+    async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None):
+        """ORIGINAL: Stream query with recompilation (creates new LangSmith session)."""
         
-        session_id = str(uuid.uuid4())
-        memory_session_id = str(uuid.uuid4())
-        self._compile_agent(session_id)
+        if not frontend_session_id:
+            frontend_session_id = f"fallback_{str(uuid.uuid4())}"
+            print("⚠️ No frontend session_id provided, using fallback")
         
+        print(f"🔗 stream_query with RECOMPILATION: {frontend_session_id}")
+        
+        # This recompiles the workflow, breaking LangSmith session continuity
+        self._compile_agent(frontend_session_id)
+        
+        # Use the helper method to actually stream
+        async for event in self._stream_with_config(query, conversation_history, frontend_session_id):
+            yield event
+    
+    async def stream_query_without_recompile(self, query: str, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None):
+        """
+        CRITICAL FIX: Stream query WITHOUT recompiling workflow.
+        Maintains LangSmith session continuity by reusing compiled workflow.
+        """
+        
+        if not frontend_session_id:
+            frontend_session_id = f"fallback_{str(uuid.uuid4())}"
+            print("⚠️ No frontend session_id provided, using fallback")
+        
+        print(f"🔗 stream_query_without_recompile (SESSION CONTINUITY): {frontend_session_id}")
+        
+        # Check if agent is compiled for this session
+        if self.app is None:
+            print("⚠️ Agent not compiled, compiling now...")
+            self._compile_agent(frontend_session_id)
+        elif self.session_id != frontend_session_id:
+            print(f"⚠️ Agent compiled for different session ({self.session_id}), recompiling...")
+            self._compile_agent(frontend_session_id)
+        else:
+            print(f"✅ Reusing compiled workflow for session: {frontend_session_id}")
+        
+        # Use the helper method to actually stream
+        async for event in self._stream_with_config(query, conversation_history, frontend_session_id):
+            yield event
+    
+    async def _stream_with_config(self, query: str, conversation_history: Optional[List[Dict]], frontend_session_id: str):
+        """Helper method to stream with consistent config."""
+        
+        # Use frontend session_id in initial state
         initial_state = {
             "input": query,
             "plan": [],
             "past_steps": [],
             "response": None,
-            "session_id": session_id,
-            "memory_session_id": memory_session_id,
+            "session_id": frontend_session_id,
             "conversation_history": conversation_history or []
         }
         
+        # Enhanced config for session continuity
         config = {
             "recursion_limit": self.recursion_limit,
             "metadata": {
                 "query": query,
-                "session_id": session_id,
-                "memory_session_id": memory_session_id,
+                "frontend_session_id": frontend_session_id,
                 "index_name": self.index_name,
-                "agent_type": "smart_methodology"
+                "agent_type": "session_cached",
+                "langsmith_session_id": frontend_session_id,
+                "conversation_turn": len(conversation_history or []) + 1,
+                "workflow_reused": self.session_id == frontend_session_id  # Track if workflow was reused
             },
-            "tags": ["smart_methodology_agent", "streaming", f"session_{session_id}"]
+            "tags": [
+                "session_cached_agent", 
+                "streaming", 
+                f"session-{frontend_session_id}",
+                f"turn-{len(conversation_history or []) + 1}",
+                "workflow-cached" if self.session_id == frontend_session_id else "workflow-new"
+            ],
+            # Consistent run naming for LangSmith
+            "run_name": f"Turn-{len(conversation_history or []) + 1}-Session-{frontend_session_id}"
         }
         
-        # Stream with smart methodology learning
+        # Stream with session continuity
         try:
-            print("🚀 Starting SMART METHODOLOGY stream with LLM analysis")
+            workflow_status = "CACHED" if self.session_id == frontend_session_id else "NEW"
+            print(f"🚀 Starting stream with {workflow_status} workflow (session continuity)")
             async for event in self.app.astream(initial_state, config=config):
                 yield event
         except Exception as e:
-            print(f"❌ Error in SMART METHODOLOGY streaming: {e}")
+            print(f"❌ Error in cached workflow streaming: {e}")
             yield {"error": {"error": str(e)}}
 
 if __name__ == "__main__":
-    print("Testing SMART METHODOLOGY workflow with LLM-powered learning...")
+    print("Testing FIXED workflow with session caching and LangSmith continuity...")
     
     try:
         from dotenv import load_dotenv
@@ -648,15 +730,16 @@ if __name__ == "__main__":
     except ImportError:
         pass
     
-
-    print("🧠 Key features:")
-    print("  - LLM-powered query analysis and categorization")
-    print("  - Intelligent tool effectiveness assessment")
-    print("  - Smart replanning reason analysis")
-    print("  - Comprehensive session outcome evaluation")
-    print("  - Dynamic pattern recognition and learning")
-    print("  - No hard-coded rules - fully adaptive")
-    print("  - CLEANED: No redundant conversation context in planning")
-    print("  - CLEANED: No truncation limits or technical footers")
-    print("  - REFACTORED: External TXT prompt templates for better maintainability")
-    print("  - UPDATED: Correct import paths for your project structure")
+    print("🔗 Key fixes:")
+    print("  - Uses frontend session_id for ALL memory operations")
+    print("  - Uses frontend session_id for LangSmith session tracking")
+    print("  - Caches compiled workflows per session")
+    print("  - No workflow recompilation within sessions")
+    print("  - Memory consistency across follow-up questions")
+    print("  - LangSmith traces grouped by conversation session")
+    print("  - Smart methodology logging with session consistency")
+    print("  - Complete information preservation")
+    print("  - Fixed session_id propagation through entire workflow")
+    print("  - LangSmith project names include session ID")
+    print("  - All traces within a conversation appear together in LangSmith")
+    print("  - Workflow caching prevents LangSmith session fragmentation")

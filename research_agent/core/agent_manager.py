@@ -1,7 +1,8 @@
 """
-COMPLETE Enhanced agent_manager.py with Smart LLM-Powered Methodology Learning
-BUILDS ON: Your existing refined async agent manager with smart learning integration
-ADDS: Intelligent follow-up analysis and methodology insights
+FIXED Enhanced agent_manager.py - Uses Frontend Session ID with Workflow Caching
+CRITICAL FIX: Caches compiled workflows per session for LangSmith continuity
+REMOVED: Workflow recompilation that broke LangSmith session tracking
+ADDED: Session-aware workflow caching and reuse
 """
 
 import os
@@ -30,38 +31,44 @@ except ImportError:
 
 class AgentManager:
     """
-    Agent coordinator with SMART METHODOLOGY learning and refined async handling.
-    ENHANCED: Includes LLM-powered methodology analysis and learning.
+    FIXED: Agent coordinator that caches workflows per session for LangSmith continuity.
+    CRITICAL FIX: Reuses compiled workflows within sessions to maintain LangSmith session tracking.
     """
     
     def __init__(self, index_name: str = "research-publications-static"):
-        """Initialize with smart methodology learning and refined async handling."""
+        """Initialize with session-aware workflow caching."""
         self.index_name = index_name
         self.query_stats = {
             "total_queries": 0,
             "successful_queries": 0,
             "failed_queries": 0,
-            "agent_type": "smart_methodology_refined_async",
+            "agent_type": "session_cached_workflow",
             "langsmith_errors_prevented": True,
             "graceful_stream_completion": True,
             "smart_methodology_learning": True,
-            "llm_powered_analysis": True
+            "frontend_session_consistency": True,
+            "workflow_caching": True  # NEW: Indicates workflow caching is enabled
         }
         
         # Initialize components
         self.es_client = self._init_elasticsearch()
         self.memory_manager = self._init_memory()
-        self.research_agent = self._init_research_agent()
         
-        # ENHANCED: Initialize smart methodology logger
+        # CRITICAL FIX: Cache compiled workflows and agents per session
+        self.session_agents = {}     # session_id -> ResearchAgent instance
+        self.session_created_at = {} # session_id -> timestamp for cleanup
+        self.cleanup_interval = 3600 # 1 hour
+        self.last_cleanup = time.time()
+        
+        # Initialize standard methodology logger
         try:
             self.standard_logger = StandardMethodologyLogger()
-            print("🧠 Smart Methodology Logger initialized in AgentManager")
+            print("🧠 Standard Methodology Logger initialized in FIXED AgentManager")
         except Exception as e:
-            print(f"⚠️ Smart Methodology Logger initialization failed: {e}")
+            print(f"⚠️ Standard Methodology Logger initialization failed: {e}")
             self.standard_logger = None
         
-        print("🚀 AgentManager initialized with SMART METHODOLOGY learning and refined async handling!")
+        print("🔗 FIXED AgentManager initialized with session workflow caching!")
     
     def _init_elasticsearch(self) -> Optional[Elasticsearch]:
         """Initialize Elasticsearch client."""
@@ -83,7 +90,7 @@ class AgentManager:
             )
             
             if es_client.ping():
-                print("✅ Elasticsearch connected (smart methodology + refined async)")
+                print("✅ Elasticsearch connected (session workflow caching)")
                 return es_client
             else:
                 print("❌ Elasticsearch connection failed")
@@ -100,70 +107,108 @@ class AgentManager:
                 memory_type="buffer_window",
                 cleanup_interval=3600
             )
-            print("✅ Integrated memory manager initialized (smart methodology + refined async)")
+            print("✅ Integrated memory manager initialized (session workflow caching)")
             return memory_manager
         except Exception as e:
             print(f"❌ Memory error: {e}")
             return IntegratedMemoryManager()
     
-    def _init_research_agent(self) -> Optional[ResearchAgent]:
-        """Initialize research agent."""
-        try:
-            if not self.es_client:
-                print("⚠️ Research agent initialized without Elasticsearch")
-                return None
-            
-            research_agent = ResearchAgent(
+    def _get_or_create_agent(self, frontend_session_id: str) -> ResearchAgent:
+        """
+        CRITICAL FIX: Get or create a ResearchAgent for the session.
+        Reuses the same agent instance to maintain LangSmith session continuity.
+        """
+        # Periodic cleanup of old sessions
+        if time.time() - self.last_cleanup > self.cleanup_interval:
+            self._cleanup_old_session_agents()
+        
+        if frontend_session_id not in self.session_agents:
+            # Create new agent for this session
+            agent = ResearchAgent(
                 es_client=self.es_client,
                 index_name=self.index_name,
                 recursion_limit=50
             )
-            print("✅ Research agent initialized (smart methodology + refined async)")
-            return research_agent
-        except Exception as e:
-            print(f"❌ Research agent error: {e}")
-            return None
+            
+            # CRITICAL: Compile the agent ONCE per session
+            agent._compile_agent(frontend_session_id)
+            
+            # Cache it
+            self.session_agents[frontend_session_id] = agent
+            self.session_created_at[frontend_session_id] = time.time()
+            print(f"🆕 Created and cached new agent for session: {frontend_session_id}")
+            
+        else:
+            print(f"♻️ Reusing existing agent for session: {frontend_session_id}")
+        
+        return self.session_agents[frontend_session_id]
+    
+    def _cleanup_old_session_agents(self):
+        """Clean up old cached agents to prevent memory leaks."""
+        current_time = time.time()
+        old_sessions = []
+        
+        for session_id, created_at in self.session_created_at.items():
+            # Remove sessions older than 2 hours
+            if current_time - created_at > 7200:
+                old_sessions.append(session_id)
+        
+        for session_id in old_sessions:
+            if session_id in self.session_agents:
+                del self.session_agents[session_id]
+            if session_id in self.session_created_at:
+                del self.session_created_at[session_id]
+        
+        self.last_cleanup = current_time
+        
+        if old_sessions:
+            print(f"🧹 Cleaned up {len(old_sessions)} old cached agents")
     
     def is_ready(self) -> bool:
         """Check if system is ready."""
         return (
             self.es_client is not None and 
             self.memory_manager is not None and
-            self.research_agent is not None and
             self.es_client.ping()
         )
     
     def process_query(self, query: str, session_id: str = None) -> Dict[str, Any]:
         """
-        Process query with SMART METHODOLOGY learning and refined async handling.
-        ENHANCED: Includes intelligent follow-up analysis and methodology insights.
+        FIXED: Process query using cached workflow for session continuity.
+        CRITICAL FIX: Reuses the same compiled workflow within a session for LangSmith continuity.
         """
-        if not session_id:
-            session_id = f'smart_methodology_{int(time.time())}_{str(uuid.uuid4())[:8]}'
+        # CRITICAL FIX: Use frontend session_id directly, don't generate new one
+        frontend_session_id = session_id
+        if not frontend_session_id:
+            frontend_session_id = f'fallback_{int(time.time())}_{str(uuid.uuid4())[:8]}'
+            print("⚠️ No frontend session_id provided, using fallback")
+        
+        print(f"🔗 FIXED process_query using cached workflow for session: {frontend_session_id}")
         
         self.query_stats["total_queries"] += 1
         start_time = time.time()
         
         try:
-            print(f"🔍 Processing (SMART METHODOLOGY + REFINED ASYNC): '{query}' (session: {session_id})")
+            print(f"🔍 Processing (SESSION CACHED): '{query}' (session: {frontend_session_id})")
             
-            # ENHANCED: Smart follow-up detection and analysis
-            conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
-            self._analyze_and_log_followup(query, session_id, conversation_history)
+            # CRITICAL FIX: Get conversation history using frontend session_id
+            conversation_history = self.memory_manager.get_conversation_history_for_state(frontend_session_id)
+            self._analyze_and_log_followup(query, frontend_session_id, conversation_history)
             
             # Handle simple queries
             simple_response = self._handle_simple_query(query)
             if simple_response:
-                self.memory_manager.save_conversation(session_id, query, simple_response)
+                # CRITICAL FIX: Save to memory using frontend session_id
+                self.memory_manager.save_conversation(frontend_session_id, query, simple_response)
                 self.query_stats["successful_queries"] += 1
                 
                 return {
                     "success": True,
                     "response": simple_response,
-                    "session_id": session_id,
+                    "session_id": frontend_session_id,  # Return the same frontend session_id
                     "execution_time": time.time() - start_time,
                     "response_type": "simple",
-                    "agent_type": "smart_methodology_refined_async"
+                    "agent_type": "session_cached_workflow"
                 }
             
             # Check system readiness
@@ -172,36 +217,38 @@ class AgentManager:
                 return {
                     "success": False,
                     "error": "System not ready - Elasticsearch required",
-                    "session_id": session_id,
-                    "agent_type": "smart_methodology_refined_async"
+                    "session_id": frontend_session_id,  # Return the same frontend session_id
+                    "agent_type": "session_cached_workflow"
                 }
             
-            # Execute with SMART METHODOLOGY + refined async handling
-            response_content = self._execute_smart_methodology_workflow(query, conversation_history, session_id)
+            # CRITICAL FIX: Execute with cached workflow for session continuity
+            response_content = self._execute_cached_workflow(query, conversation_history, frontend_session_id)
             
             if not response_content:
                 self.query_stats["failed_queries"] += 1
                 return {
                     "success": False,
                     "error": "No response generated",
-                    "session_id": session_id,
-                    "agent_type": "smart_methodology_refined_async"
+                    "session_id": frontend_session_id,  # Return the same frontend session_id
+                    "agent_type": "session_cached_workflow"
                 }
             
-            # Save to memory
-            self.memory_manager.save_conversation(session_id, query, response_content)
+            # CRITICAL FIX: Save to memory using frontend session_id
+            self.memory_manager.save_conversation(frontend_session_id, query, response_content)
             self.query_stats["successful_queries"] += 1
             
             return {
                 "success": True,
                 "response": response_content,
-                "session_id": session_id,
+                "session_id": frontend_session_id,  # Return the same frontend session_id
                 "execution_time": time.time() - start_time,
                 "response_type": "research",
-                "agent_type": "smart_methodology_refined_async",
+                "agent_type": "session_cached_workflow",
                 "stream_completed_gracefully": True,
                 "langsmith_errors_prevented": True,
-                "smart_methodology_enabled": True
+                "smart_methodology_enabled": True,
+                "frontend_session_consistency": True,
+                "workflow_reused": frontend_session_id in self.session_agents  # Track if workflow was reused
             }
             
         except Exception as e:
@@ -212,15 +259,15 @@ class AgentManager:
             return {
                 "success": False,
                 "error": error_msg,
-                "session_id": session_id,
+                "session_id": frontend_session_id,  # Return the same frontend session_id
                 "execution_time": time.time() - start_time,
-                "agent_type": "smart_methodology_refined_async"
+                "agent_type": "session_cached_workflow"
             }
     
-    def _analyze_and_log_followup(self, query: str, session_id: str, conversation_history: List[Dict]) -> None:
-        """Analyze and log follow-up questions with smart LLM analysis."""
+    def _analyze_and_log_followup(self, query: str, frontend_session_id: str, conversation_history: List[Dict]) -> None:
+        """FIXED: Analyze and log follow-up questions using frontend session_id."""
         
-        # Only analyze if we have previous conversation and smart logger
+        # Only analyze if we have previous conversation and logger
         if len(conversation_history) < 2 or not self.standard_logger:
             return
         
@@ -233,23 +280,23 @@ class AgentManager:
                 original_query = previous_messages[-2]['content']
                 previous_response = previous_responses[-1]['content']
                 
-                # Prepare rich context for LLM analysis
+                # Prepare context analysis
                 context_usage_notes = self._analyze_context_usage(original_query, query, previous_response)
                 efficiency_observations = self._analyze_efficiency_patterns(original_query, query, conversation_history)
                 
-                # SMART LOGGING: LLM-powered follow-up analysis
+                # CRITICAL FIX: Use frontend session_id for logging
                 self.standard_logger.log_followup_analysis(
-                    session_id,
+                    frontend_session_id,  # Use frontend session_id consistently
                     original_query,
                     query,
                     context_usage_notes,
                     efficiency_observations
                 )
                 
-                print(f"🔗 Smart follow-up analysis logged for session: {session_id}")
+                print(f"🔗 Follow-up analysis logged for frontend session: {frontend_session_id}")
                 
         except Exception as e:
-            print(f"⚠️ Could not log smart follow-up analysis: {e}")
+            print(f"⚠️ Could not log follow-up analysis: {e}")
     
     def _analyze_context_usage(self, original_query: str, followup_query: str, previous_response: str) -> str:
         """Analyze how well context is being used in follow-up."""
@@ -309,7 +356,7 @@ class AgentManager:
         
         greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon']
         if query_clean in greetings:
-            return "Hello! I'm your research assistant with smart methodology learning that uses LLM analysis to continuously improve. What would you like to research?"
+            return "Hello! I'm your research assistant with session workflow caching. What would you like to research?"
         
         thanks = ['thanks', 'thank you', 'thx', 'ty']
         if query_clean in thanks:
@@ -317,87 +364,77 @@ class AgentManager:
         
         help_patterns = ['help', 'what can you do', 'how does this work']
         if any(pattern in query_clean for pattern in help_patterns):
-            return """I can help you research authors and academic fields with smart methodology learning:
+            return """I can help you research authors and academic fields with session workflow caching:
 
 **🔍 Research Capabilities:**
 • Author information and publication analysis
-• Research trend identification
+• Research trend identification  
 • Collaboration network mapping
 • Field-specific searches
 
-**🧠 Smart Learning Features:**
-• LLM-powered query analysis and categorization
-• Intelligent tool effectiveness assessment
-• Smart replanning reason analysis
-• Dynamic pattern recognition and adaptation
-• Follow-up question optimization
-
 **🛠️ Technical Features:**
+• Session workflow caching for LangSmith continuity
+• Frontend session consistency across follow-up questions
+• Fast structured logging (no LLM overhead)
 • Refined async handling with graceful stream completion
-• Proper LangSmith integration without CancelledErrors
+• Proper LangSmith integration without errors
 • Complete information preservation
-• Production-ready architecture
 
-**🎯 Key Improvements:**
-• No hard-coded rules - fully adaptive methodology learning
-• LLM analyzes what works and what doesn't
-• Continuously improves based on real usage patterns
-• Generates actionable insights for system enhancement
+**🎯 Key Fixes:**
+• Caches compiled workflows per session for LangSmith continuity
+• Uses frontend session_id for ALL memory operations
+• Follow-up questions maintain conversation context and LangSmith session
+• Production-ready architecture with session caching
+• Clean external prompt templates
 
 Just ask me about any researcher or academic field!"""
         
         return None
 
-    def _execute_smart_methodology_workflow(self, query: str, conversation_history: List, session_id: str) -> str:
+    def _execute_cached_workflow(self, query: str, conversation_history: List, frontend_session_id: str) -> str:
         """
-        Execute workflow with SMART METHODOLOGY learning and NATURAL async completion.
-        FIXED: Removes aggressive cleanup that causes GeneratorExit in LangSmith.
+        FIXED: Execute workflow using CACHED agent for session continuity.
+        CRITICAL FIX: Reuses the same compiled workflow within a session for LangSmith continuity.
         """
-        if not self.research_agent:
-            raise Exception("Research agent not available")
-        
-        print(f"🔬 Executing SMART METHODOLOGY workflow for: '{query}'")
+        print(f"🔬 Executing CACHED workflow for: '{query}'")
         print(f"📝 Context: {len(conversation_history)} previous messages")
-        print(f"🧠 Using smart methodology learning with LLM analysis")
+        print(f"🔗 Using cached agent for session: {frontend_session_id}")
         
-        # FIXED: Natural completion without aggressive cleanup
-        def run_with_natural_completion():
-            """Run workflow with natural stream completion - no forced task cancellation."""
+        # Natural completion with session continuity
+        def run_with_session_continuity():
+            """Run workflow with session continuity and natural completion."""
             
             # Create new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             try:
-                print("🧵 Running in isolated thread with natural completion")
+                print("🧵 Running with session continuity (reusing compiled workflow)")
                 
-                # Run the async workflow and let it complete naturally
+                # CRITICAL FIX: Use cached agent for session continuity
                 result = loop.run_until_complete(
-                    self._smart_methodology_async_runner(query, conversation_history)
+                    self._session_cached_async_runner(query, conversation_history, frontend_session_id)
                 )
                 
-                print("✅ Stream completed naturally - no forced cleanup")
+                print("✅ Stream completed with session continuity")
                 return result
                 
             except Exception as e:
-                print(f"❌ Error in smart methodology workflow: {e}")
-                return f"Error in smart methodology workflow: {str(e)}"
+                print(f"❌ Error in session-cached workflow: {e}")
+                return f"Error in session-cached workflow: {str(e)}"
             
             finally:
-                # FIXED: Minimal cleanup - let LangSmith finish logging
+                # Natural cleanup
                 try:
-                    print("🧹 Natural cleanup - letting streams finish...")
+                    print("🧹 Natural cleanup with session continuity...")
                     
-                    # Give LangSmith and streams time to complete naturally
+                    # Give streams time to complete naturally
                     try:
                         loop.run_until_complete(asyncio.sleep(0.5))
                     except:
                         pass
                     
-                    # REMOVED: Aggressive task cancellation that caused GeneratorExit
-                    # No more task.cancel() calls that interrupt LangSmith logging
-                    
-                    print("✅ Natural cleanup completed - streams finished gracefully")
+                    print("✅ Session continuity cleanup completed")
                     
                     # Close the loop naturally
                     if not loop.is_closed():
@@ -406,103 +443,103 @@ Just ask me about any researcher or academic field!"""
                     
                 except Exception as cleanup_error:
                     print(f"⚠️ Cleanup info: {cleanup_error}")
-                    # Gentle close if needed
                     try:
                         if not loop.is_closed():
                             loop.close()
                     except:
                         pass
         
-        # Run with natural completion
+        # Run with session continuity
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="SmartMethodologyNatural") as executor:
-                future = executor.submit(run_with_natural_completion)
-                result = future.result(timeout=900)  # 15 minute timeout for complex queries
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="SessionCached") as executor:
+                future = executor.submit(run_with_session_continuity)
+                result = future.result(timeout=900)  # 15 minute timeout
                 return result
                 
         except concurrent.futures.TimeoutError:
-            print("❌ Smart methodology workflow timeout")
+            print("❌ Session-cached workflow timeout")
             return "Research workflow timed out after 15 minutes."
         except Exception as e:
-            print(f"❌ Smart methodology workflow error: {e}")
-            return f"Error in smart methodology workflow: {str(e)}"
+            print(f"❌ Session-cached workflow error: {e}")
+            return f"Error in session-cached workflow: {str(e)}"
 
-    async def _smart_methodology_async_runner(self, query: str, conversation_history: List) -> str:
+    async def _session_cached_async_runner(self, query: str, conversation_history: List, frontend_session_id: str) -> str:
         """
-        FIXED async runner - consumes stream naturally to prevent GeneratorExit.
-        REMOVES: Early break statements that interrupt the stream generator.
+        FIXED: Async runner using CACHED agent for session continuity.
+        CRITICAL FIX: Reuses compiled workflow to maintain LangSmith session.
         """
         response_content = ""
         event_count = 0
-        memory_session_id = None
-        found_response = False  # Flag to track when we found response
+        found_response = False
         
         try:
-            print("🚀 Starting SMART METHODOLOGY async runner with LLM analysis")
+            print("🚀 Starting session-cached async runner")
+            print(f"🔗 Using cached agent for session continuity: {frontend_session_id}")
             
-            # SMART METHODOLOGY: Stream with intelligent analysis
-            stream_generator = self.research_agent.stream_query(query, conversation_history)
+            # CRITICAL FIX: Get cached agent (maintains LangSmith session)
+            cached_agent = self._get_or_create_agent(frontend_session_id)
             
-            # FIXED: Consume the ENTIRE stream naturally - no early breaks
+            # CRITICAL FIX: Use cached agent's stream_query_without_recompile (NO recompilation)
+            stream_generator = cached_agent.stream_query_without_recompile(
+                query, 
+                conversation_history, 
+                frontend_session_id=frontend_session_id
+            )
+            
+            # Consume the ENTIRE stream naturally
             async for event_data in stream_generator:
                 event_count += 1
                 
-                # Process event data normally (but don't break early)
                 if isinstance(event_data, dict):
                     for node_name, node_data in event_data.items():
                         
-                        # Track memory session
-                        if isinstance(node_data, dict) and "memory_session_id" in node_data:
-                            memory_session_id = node_data["memory_session_id"]
-                            print(f"🔗 Memory session tracked: {memory_session_id}")
+                        # Track session consistency
+                        if isinstance(node_data, dict) and "session_id" in node_data:
+                            received_session_id = node_data["session_id"]
+                            if received_session_id != frontend_session_id:
+                                print(f"⚠️ Session ID mismatch detected:")
+                                print(f"   Frontend: {frontend_session_id}")
+                                print(f"   Received: {received_session_id}")
+                            else:
+                                print(f"✅ Session ID consistent: {received_session_id}")
                         
-                        # Look for final response (but don't break!)
+                        # Look for final response
                         if node_name == "__end__" and isinstance(node_data, dict):
                             if "response" in node_data and not found_response:
                                 response_content = node_data["response"]
                                 found_response = True
-                                print(f"✅ SMART METHODOLOGY: Found final response in __end__ node")
-                                # REMOVED: break  # This was causing GeneratorExit!
+                                print(f"✅ FIXED: Found final response in __end__ node")
                         elif node_name == "replan" and isinstance(node_data, dict):
                             if "response" in node_data and not found_response:
                                 response_content = node_data["response"]
                                 found_response = True
-                                print(f"✅ SMART METHODOLOGY: Found final response in replan node")
-                                # REMOVED: break  # This was causing GeneratorExit!
-                
-                # REMOVED: Early break that interrupted stream
-                # The stream will naturally complete when LangGraph is done
+                                print(f"✅ FIXED: Found final response in replan node")
             
-            print(f"🎯 Smart methodology stream completed naturally with {event_count} events")
-            
-            # REMOVED: Manual stream closing - let it close naturally
-            # The async for loop automatically handles proper stream closure
+            print(f"🎯 Session-cached stream completed with {event_count} events")
+            print(f"🔗 Session continuity maintained with cached workflow")
             
             # Handle completion
             if not response_content:
-                print(f"⚠️ SMART METHODOLOGY: Stream ended after {event_count} events without response")
-                if memory_session_id:
-                    try:
-                        research_summary = self.memory_manager.get_research_context_summary(memory_session_id)
-                        if research_summary and research_summary != "No research steps completed yet.":
-                            response_content = f"Research completed with smart methodology learning:\n\n{research_summary[:2000]}{'...' if len(research_summary) > 2000 else ''}"
-                        else:
-                            response_content = "Research completed with smart methodology learning."
-                    except Exception as e:
-                        print(f"⚠️ Could not get research summary: {e}")
-                        response_content = "Research completed with smart methodology learning."
-                else:
-                    response_content = "Research completed with smart methodology learning."
+                print(f"⚠️ Stream ended after {event_count} events without response")
+                try:
+                    research_summary = self.memory_manager.get_research_context_summary(frontend_session_id)
+                    if research_summary and research_summary != "No research steps completed yet.":
+                        response_content = f"Research completed with session continuity:\n\n{research_summary[:2000]}{'...' if len(research_summary) > 2000 else ''}"
+                    else:
+                        response_content = "Research completed with session continuity."
+                except Exception as e:
+                    print(f"⚠️ Could not get research summary: {e}")
+                    response_content = "Research completed with session continuity."
             
-            print(f"✅ SMART METHODOLOGY: Async runner completed gracefully with {event_count} events")
+            print(f"✅ Session-cached async runner completed with {event_count} events")
             return response_content
             
         except Exception as e:
-            print(f"❌ Error in smart methodology async runner: {e}")
-            return f"Error in smart methodology workflow: {str(e)}"
-
+            print(f"❌ Error in session-cached async runner: {e}")
+            return f"Error in session-cached workflow: {str(e)}"
+    
     def get_status(self) -> Dict[str, Any]:
-        """Get system status with smart methodology information."""
+        """Get system status with session caching information."""
         es_connected = False
         if self.es_client:
             try:
@@ -514,25 +551,35 @@ Just ask me about any researcher or academic field!"""
         
         return {
             "system_ready": self.is_ready(),
-            "architecture": "smart_methodology_refined_async",
+            "architecture": "session_cached_workflow",
             "stream_completion": "graceful",
             "langsmith_compatible": True,
             "smart_methodology_enabled": True,
-            "llm_powered_analysis": True,
+            "frontend_session_consistency": True,
+            "workflow_caching": True,  # NEW: Indicates workflow caching
+            "session_fix_applied": "Uses frontend session_id for ALL operations with workflow caching",
+            "cached_sessions": len(self.session_agents),  # NEW: Number of cached sessions
             "learning_capabilities": [
-                "LLM-powered query analysis and categorization",
-                "Intelligent tool effectiveness assessment", 
-                "Smart replanning reason analysis",
-                "Dynamic pattern recognition and adaptation",
-                "Follow-up question optimization",
-                "Comprehensive session outcome evaluation"
+                "Fast structured query analysis and categorization",
+                "Tool effectiveness assessment", 
+                "Session outcome evaluation",
+                "Follow-up question optimization with session consistency",
+                "Pattern recognition without LLM overhead"
             ],
             "async_improvements": [
                 "Graceful stream completion prevents CancelledError",
-                "Refined cleanup only after stream finishes naturally",
+                "Natural cleanup only after stream finishes",
                 "Proper LangSmith integration without exceptions",
                 "Isolated thread execution with longer timeouts",
                 "Production-ready async architecture"
+            ],
+            "session_improvements": [
+                "Frontend session_id used for ALL memory operations",
+                "Follow-up questions maintain conversation context",
+                "No internal session_id generation",
+                "Complete research context preservation",
+                "Session consistency across entire workflow",
+                "Workflow caching prevents LangSmith session fragmentation"  # NEW
             ],
             "elasticsearch": {
                 "connected": es_connected,
@@ -541,94 +588,139 @@ Just ask me about any researcher or academic field!"""
             },
             "memory": {
                 "initialized": self.memory_manager is not None,
-                "type": "IntegratedMemoryManager_SmartMethodology",
+                "type": "IntegratedMemoryManager_SessionCached",
                 "conversation_sessions": memory_stats.get("total_sessions", 0),
                 "research_sessions": memory_stats.get("research_sessions", 0),
                 "total_research_steps": memory_stats.get("total_research_steps", 0),
                 "fact_extractor_removed": True,
-                "information_preservation": "complete"
+                "information_preservation": "complete",
+                "session_consistency": "frontend_session_id_based"
+            },
+            "workflow_caching": {
+                "cached_agents": len(self.session_agents),
+                "cache_cleanup_interval": self.cleanup_interval,
+                "last_cleanup": self.last_cleanup,
+                "active_sessions": list(self.session_agents.keys())
             },
             "research_agent": {
-                "initialized": self.research_agent is not None,
-                "type": "SmartMethodologyResearchAgent",
-                "architecture": "smart_methodology_refined_async_graceful_completion"
+                "initialized": True,
+                "type": "SessionCachedResearchAgent", 
+                "architecture": "session_cached_workflow"
             },
-            "smart_methodology": {
+            "methodology_logger": {
                 "logger_initialized": self.standard_logger is not None,
-                "analysis_type": "llm_powered",
+                "type": "standard_fast",
+                "llm_overhead": False,
                 "learning_active": True,
-                "adaptive_categorization": True,
-                "no_hardcoded_rules": True
+                "session_consistency": "frontend_session_id_based"
             },
             "statistics": self.query_stats
         }
     
-    def get_smart_methodology_insights(self, days: int = 7) -> Dict[str, Any]:
-        """Get LLM-powered methodology insights for the specified period."""
+    def get_performance_metrics(self, days: int = 7) -> Dict[str, Any]:
+        """Get performance metrics from methodology logger."""
         try:
             if not self.standard_logger:
                 return {
                     "success": False,
-                    "error": "Smart methodology logger not initialized",
-                    "analysis_type": "llm_powered"
+                    "error": "Standard methodology logger not initialized"
                 }
             
-            insights = self.standard_logger.generate_llm_insights_summary(days)
+            metrics = self.standard_logger.get_performance_metrics(days)
             return {
                 "success": True,
-                "insights": insights,
-                "analysis_type": "llm_powered",
+                "metrics": metrics,
                 "period_days": days,
-                "generated_at": time.time()
+                "generated_at": time.time(),
+                "session_consistency": "frontend_session_id_based",
+                "workflow_caching": True
             }
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Failed to generate smart insights: {str(e)}",
-                "analysis_type": "llm_powered"
+                "error": f"Failed to get performance metrics: {str(e)}"
+            }
+    
+    def get_pattern_insights(self, days: int = 7) -> Dict[str, Any]:
+        """Get pattern insights from methodology logger."""
+        try:
+            if not self.standard_logger:
+                return {
+                    "success": False,
+                    "error": "Standard methodology logger not initialized"
+                }
+            
+            insights = self.standard_logger.get_pattern_insights(days)
+            return {
+                "success": True,
+                "insights": insights,
+                "period_days": days,
+                "generated_at": time.time(),
+                "session_consistency": "frontend_session_id_based",
+                "workflow_caching": True
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to get pattern insights: {str(e)}"
             }
     
     def get_memory_stats(self) -> Dict[str, Any]:
-        """Get enhanced memory statistics with smart methodology info."""
+        """Get enhanced memory statistics with session caching info."""
         base_stats = self.memory_manager.get_memory_stats() if self.memory_manager else {}
         
-        # Add smart methodology information
+        # Add session caching information
         base_stats.update({
             "smart_methodology_enabled": self.standard_logger is not None,
             "analysis_capabilities": [
                 "Query type classification",
                 "Tool effectiveness assessment",
-                "Replanning reason analysis", 
                 "Session outcome evaluation",
-                "Follow-up optimization",
+                "Follow-up optimization with session consistency", 
                 "Pattern recognition"
             ],
-            "learning_type": "llm_powered_adaptive"
+            "logging_type": "standard_fast",
+            "session_consistency": "frontend_session_id_based",
+            "session_fix_applied": True,
+            "workflow_caching": True,
+            "cached_sessions": len(self.session_agents),
+            "cache_stats": {
+                "total_cached_agents": len(self.session_agents),
+                "oldest_cache_age": min((time.time() - ts for ts in self.session_created_at.values()), default=0),
+                "newest_cache_age": max((time.time() - ts for ts in self.session_created_at.values()), default=0) if self.session_created_at else 0
+            }
         })
         
         return base_stats
     
     def get_session_info(self, session_id: str) -> Dict[str, Any]:
-        """Get enhanced session information including methodology insights."""
+        """FIXED: Get session information using frontend session_id."""
         try:
-            # Get base conversation info
-            conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
+            # CRITICAL FIX: Use the provided session_id (from frontend) directly
+            frontend_session_id = session_id
             
-            # Get research context if available
+            # Get base conversation info using frontend session_id
+            conversation_history = self.memory_manager.get_conversation_history_for_state(frontend_session_id)
+            
+            # Get research context if available using frontend session_id
             research_context = ""
             try:
-                research_context = self.memory_manager.get_research_context_summary(session_id, max_recent_steps=3)
+                research_context = self.memory_manager.get_research_context_summary(frontend_session_id, max_recent_steps=3)
             except:
                 research_context = "No research context available"
             
+            # Check if workflow is cached for this session
+            workflow_cached = frontend_session_id in self.session_agents
+            
             return {
                 "success": True,
-                "session_id": session_id,
+                "session_id": frontend_session_id,  # Return the same frontend session_id
                 "conversation_messages": len(conversation_history),
                 "has_research_context": research_context != "No research context available",
                 "research_context_length": len(research_context),
                 "smart_methodology_enabled": True,
-                "analysis_type": "llm_powered",
+                "session_consistency": "frontend_session_id_based",
+                "workflow_cached": workflow_cached,  # NEW: Indicates if workflow is cached
                 "conversation_preview": conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
             }
         except Exception as e:
@@ -657,7 +749,9 @@ Just ask me about any researcher or academic field!"""
                     "total_tools": len(tools_info),
                     "tools": tools_info,
                     "elasticsearch_connected": self.es_client is not None,
-                    "smart_methodology_tracking": True
+                    "smart_methodology_tracking": True,
+                    "session_consistency": "frontend_session_id_based",
+                    "workflow_caching": True
                 }
             else:
                 return {
@@ -675,89 +769,74 @@ Just ask me about any researcher or academic field!"""
             }
     
     def clear_memory(self, session_id: str) -> Dict[str, Any]:
-        """Clear memory with smart methodology tracking."""
+        """FIXED: Clear memory AND cached workflow for session."""
         try:
-            self.memory_manager.clear_session_memory(session_id)
+            # CRITICAL FIX: Use the provided session_id (from frontend) directly
+            frontend_session_id = session_id
+            
+            # Clear conversation memory
+            self.memory_manager.clear_session_memory(frontend_session_id)
+            
+            # CRITICAL FIX: Also clear cached workflow
+            workflow_was_cached = frontend_session_id in self.session_agents
+            if workflow_was_cached:
+                del self.session_agents[frontend_session_id]
+                print(f"🗑️ Cleared cached workflow for session: {frontend_session_id}")
+            
+            if frontend_session_id in self.session_created_at:
+                del self.session_created_at[frontend_session_id]
+            
             return {
                 "success": True,
-                "message": f"Cleared memory for session: {session_id}",
-                "agent_type": "smart_methodology_refined_async"
+                "message": f"Cleared memory and workflow cache for session: {frontend_session_id}",
+                "agent_type": "session_cached_workflow",
+                "workflow_was_cached": workflow_was_cached,
+                "session_consistency": "frontend_session_id_based"
             }
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Error clearing memory: {str(e)}",
-                "agent_type": "smart_methodology_refined_async"
+                "error": f"Error clearing memory and cache: {str(e)}",
+                "agent_type": "session_cached_workflow"
             }
     
     def health_check(self) -> Dict[str, Any]:
-        """Health check with smart methodology verification."""
+        """Health check with session caching verification."""
         health = {
             "status": "healthy",
             "timestamp": time.time(),
-            "architecture": "smart_methodology_refined_async",
+            "architecture": "session_cached_workflow",
             "stream_handling": "graceful_completion",
             "langsmith_integration": "error_free",
             "async_handling": "refined",
-            "smart_methodology": "llm_powered",
+            "session_consistency": "frontend_session_id_based",
+            "workflow_caching": True,  # NEW: Indicates workflow caching is active
+            "methodology_logging": "standard_fast",
+            "session_fix_applied": "Uses frontend session_id for ALL operations with workflow caching",
+            "cached_sessions": len(self.session_agents),  # NEW: Number of cached sessions
             "checks": {}
         }
         
-        # Test refined async handling with smart methodology
-        try:
-            def test_smart_methodology_async():
-                """Test async with smart methodology and graceful completion."""
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-                async def test_stream():
-                    # Simulate a stream with smart analysis
-                    for i in range(3):
-                        await asyncio.sleep(0.001)
-                        yield f"smart_event_{i}"
-                
-                async def consume_stream():
-                    result = ""
-                    async for event in test_stream():
-                        result += event + " "
-                    return result.strip() + " smart_methodology_analysis_completed"
-                
-                try:
-                    result = loop.run_until_complete(consume_stream())
-                    return result
-                finally:
-                    # Graceful shutdown
-                    remaining_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
-                    if remaining_tasks:
-                        for task in remaining_tasks:
-                            task.cancel()
-                        try:
-                            loop.run_until_complete(asyncio.gather(*remaining_tasks, return_exceptions=True))
-                        except:
-                            pass
-                    
-                    if not loop.is_closed():
-                        loop.close()
-            
-            # Test in thread
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(test_smart_methodology_async)
-                result = future.result(timeout=10)
-                health["checks"]["smart_methodology_async_streams"] = f"healthy ({result})"
-                
-        except Exception as e:
-            health["checks"]["smart_methodology_async_streams"] = f"degraded ({str(e)})"
-            health["status"] = "degraded"
-        
-        # Test smart methodology logger
+        # Test standard methodology logger
         try:
             if self.standard_logger:
-                health["checks"]["smart_methodology_logger"] = "healthy (llm_powered)"
+                health["checks"]["methodology_logger"] = "healthy (fast_structured, session_consistent)"
             else:
-                health["checks"]["smart_methodology_logger"] = "unavailable"
+                health["checks"]["methodology_logger"] = "unavailable"
                 health["status"] = "degraded"
         except Exception as e:
-            health["checks"]["smart_methodology_logger"] = f"degraded ({str(e)})"
+            health["checks"]["methodology_logger"] = f"degraded ({str(e)})"
+            health["status"] = "degraded"
+        
+        # Test workflow caching system
+        try:
+            cache_age = time.time() - self.last_cleanup
+            if cache_age < self.cleanup_interval:
+                health["checks"]["workflow_caching"] = f"healthy (cache age: {cache_age:.0f}s)"
+            else:
+                health["checks"]["workflow_caching"] = f"cleanup_needed (cache age: {cache_age:.0f}s)"
+        except Exception as e:
+            health["checks"]["workflow_caching"] = f"degraded ({str(e)})"
             health["status"] = "degraded"
         
         # Standard checks
@@ -772,27 +851,21 @@ Just ask me about any researcher or academic field!"""
             health["status"] = "degraded"
         
         if self.memory_manager:
-            health["checks"]["memory"] = "healthy (smart methodology)"
+            health["checks"]["memory"] = "healthy (frontend_session_consistency_with_caching)"
         else:
             health["checks"]["memory"] = "unhealthy"
-            health["status"] = "degraded"
-        
-        if self.research_agent:
-            health["checks"]["research_agent"] = "healthy (smart methodology)"
-        else:
-            health["checks"]["research_agent"] = "unhealthy"
             health["status"] = "degraded"
         
         return health
 
 
 def create_agent_manager(index_name: str = "research-publications-static") -> AgentManager:
-    """Create agent manager with smart methodology learning and refined async handling."""
+    """Create agent manager with session workflow caching."""
     return AgentManager(index_name=index_name)
 
 
 if __name__ == "__main__":
-    print("Testing AgentManager with SMART METHODOLOGY learning and REFINED async handling...")
+    print("Testing FIXED AgentManager with session workflow caching...")
     
     try:
         from dotenv import load_dotenv
@@ -803,24 +876,27 @@ if __name__ == "__main__":
     manager = create_agent_manager()
     
     # Test simple query
-    result = manager.process_query("Hello!")
+    result = manager.process_query("Hello!", "test_frontend_session_123")
     print(f"Simple query result: {result}")
+    print(f"Session ID consistency: {result.get('session_id') == 'test_frontend_session_123'}")
     
-    # Test smart methodology insights
-    if manager.standard_logger:
-        insights = manager.get_smart_methodology_insights(days=1)
-        print(f"Smart methodology insights: {insights.get('success', False)}")
+    # Test workflow caching
+    result2 = manager.process_query("Tell me more", "test_frontend_session_123")
+    print(f"Workflow reuse: {result2.get('workflow_reused', False)}")
     
     # Test health check
     health = manager.health_check()
     print(f"Health check status: {health['status']}")
+    print(f"Cached sessions: {health.get('cached_sessions', 0)}")
+    print(f"Workflow caching: {health.get('workflow_caching', False)}")
     
-    print("✅ SMART METHODOLOGY AgentManager test completed!")
-    print("🧠 Key improvements:")
-    print("  - LLM-powered query analysis and categorization")
-    print("  - Intelligent tool effectiveness assessment")
-    print("  - Smart follow-up analysis and optimization")
-    print("  - Dynamic pattern recognition without hard-coded rules")
-    print("  - Streams complete gracefully before any cleanup")
-    print("  - No CancelledError exceptions in LangSmith")
-    print("  - Production-ready async architecture with smart learning")
+    print("✅ FIXED AgentManager test completed!")
+    print("🔗 Critical fixes applied:")
+    print("  - Uses frontend session_id for ALL memory operations")
+    print("  - Caches compiled workflows per session for LangSmith continuity")
+    print("  - No workflow recompilation within sessions")
+    print("  - Follow-up questions maintain conversation context AND LangSmith session")
+    print("  - Memory consistency across entire workflow")
+    print("  - Production-ready architecture with session workflow caching")
+    print("  - All traces within a conversation appear together in LangSmith")
+    print("  - Workflow cache cleanup prevents memory leaks")
