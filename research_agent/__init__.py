@@ -1,162 +1,145 @@
 """
-Research Publications Agent
-A LangGraph-based plan-and-execute agent for querying research publications
+Simplified Research Publications Agent
+A streamlined LangGraph-based plan-and-execute agent for querying research publications
 using Elasticsearch with natural language processing capabilities.
-Features:
-- Smart methodology learning with fast structured logging
-- Clean prompt templates in separate TXT files
-- Complete research context preservation
-- Session-aware conversation management
-- No GeneratorExit errors - graceful stream completion
-- Standard LangGraph implementation for reliability
 
-UPDATED: Fixed imports for Flask app compatibility with absolute imports in workflow.py
+Simplified Features:
+- Uses LangGraph's built-in session management
+- Flexible model configuration system
+- External prompt templates (preserved)
+- Basic conversation memory
+- Streamlined error handling
+- Clean, maintainable codebase
 """
 
-__version__ = "1.0.0"  # Updated version for production-ready implementation
-__author__ = "Research Agent Team"
+__version__ = "2.0.0-simplified"
+__description__ = "Simplified Research Agent with LangGraph session management"
 
-# UPDATED: Import core workflow components with error handling for absolute/relative import compatibility
+# Core components with error handling for import compatibility
 try:
     # Try relative imports first (for internal package use)
-    from .core.workflow import (
-        ResearchAgent,
-        run_research_query,
-        compile_research_agent,
-        PlanExecuteState,  # Now imported from workflow where it's defined
-        Plan,             # Now imported from workflow where it's defined
-        Response,         # Now imported from workflow where it's defined
-        Act              # Now imported from workflow where it's defined
-    )
+    from .core.agent_manager import SimplifiedAgentManager
+    from .core.memory_manager import SimplifiedMemoryManager  
+    from .core.workflow import ResearchAgent, create_workflow
 except ImportError:
     # Fall back to absolute imports (for Flask app compatibility)
-    from research_agent.core.workflow import (
-        ResearchAgent,
-        run_research_query,
-        compile_research_agent,
-        PlanExecuteState,
-        Plan,
-        Response,
-        Act
-    )
+    try:
+        from research_agent.core.agent_manager import SimplifiedAgentManager
+        from research_agent.core.memory_manager import SimplifiedMemoryManager
+        from research_agent.core.workflow import ResearchAgent, create_workflow
+    except ImportError:
+        print("⚠️ Could not import simplified components - check file structure")
+        SimplifiedAgentManager = None
+        SimplifiedMemoryManager = None
+        ResearchAgent = None
+        create_workflow = None
 
-# UPDATED: Import agent management with error handling
-try:
-    from .core.agent_manager import AgentManager, create_agent_manager
-except ImportError:
-    from research_agent.core.agent_manager import AgentManager, create_agent_manager
-
-# UPDATED: Import memory system with error handling
-try:
-    from .core.memory_manager import IntegratedMemoryManager, create_memory_manager
-except ImportError:
-    from research_agent.core.memory_manager import IntegratedMemoryManager, create_memory_manager
-
-# UPDATED: Import fast methodology logging with error handling
-try:
-    from .core.methodology_logger import StandardMethodologyLogger, create_standard_methodology_logger
-except ImportError:
-    from research_agent.core.methodology_logger import StandardMethodologyLogger, create_standard_methodology_logger
-
-# UPDATED: Import tools system with error handling
+# Import tools system with error handling
 try:
     from .tools import get_all_tools
 except ImportError:
-    from research_agent.tools import get_all_tools
+    try:
+        from research_agent.tools import get_all_tools
+    except ImportError:
+        print("⚠️ Could not import tools system")
+        get_all_tools = None
 
-# UPDATED: Import prompt system with error handling
+# Import prompt system with error handling (preserved as requested)
 try:
     from .prompts import (
         PLANNING_PROMPT_TEMPLATE,
         EXECUTION_PROMPT_TEMPLATE,
-        REPLANNING_PROMPT_TEMPLATE,
-        get_prompt_template
+        REPLANNING_PROMPT_TEMPLATE
     )
 except ImportError:
-    from research_agent.prompts import (
-        PLANNING_PROMPT_TEMPLATE,
-        EXECUTION_PROMPT_TEMPLATE,
-        REPLANNING_PROMPT_TEMPLATE,
-        get_prompt_template
-    )
+    try:
+        from research_agent.prompts import (
+            PLANNING_PROMPT_TEMPLATE,
+            EXECUTION_PROMPT_TEMPLATE,
+            REPLANNING_PROMPT_TEMPLATE
+        )
+    except ImportError:
+        print("⚠️ Could not import prompt templates")
+        PLANNING_PROMPT_TEMPLATE = None
+        EXECUTION_PROMPT_TEMPLATE = None
+        REPLANNING_PROMPT_TEMPLATE = None
 
-__all__ = [
-    # Core workflow
-    "ResearchAgent",
-    "run_research_query",
-    "compile_research_agent",
-    
-    # State and models (now from workflow)
-    "PlanExecuteState",
-    "Plan",
-    "Response",
-    "Act",
-    
-    # Management systems
-    "AgentManager",
-    "create_agent_manager",
-    "IntegratedMemoryManager",
-    "create_memory_manager",
-    
-    # Fast logging system
-    "StandardMethodologyLogger",
-    "create_standard_methodology_logger",
-    
-    # Tools system
-    "get_all_tools",
-    
-    # Prompt system
-    "PLANNING_PROMPT_TEMPLATE",
-    "EXECUTION_PROMPT_TEMPLATE",
-    "REPLANNING_PROMPT_TEMPLATE",
-    "get_prompt_template",
-]
+# Helper functions
+def create_agent_manager(index_name: str = "research-publications-static"):
+    """Create simplified agent manager."""
+    if SimplifiedAgentManager:
+        return SimplifiedAgentManager(index_name=index_name)
+    else:
+        raise ImportError("SimplifiedAgentManager not available")
 
-# Version info tuple for programmatic access
-VERSION_INFO = tuple(map(int, __version__.split('.')))
+def create_memory_manager():
+    """Create simplified memory manager."""
+    if SimplifiedMemoryManager:
+        return SimplifiedMemoryManager()
+    else:
+        raise ImportError("SimplifiedMemoryManager not available")
 
-def get_version_info():
-    """Get detailed version information."""
-    return {
-        "version": __version__,
-        "version_info": VERSION_INFO,
-        "status": "production-ready with Flask compatibility",  # UPDATED status
-        "features": [
-            "LangGraph plan-and-execute workflow",
-            "Fast structured methodology logging (no LLM overhead)",
-            "External TXT prompt templates",
-            "Complete research context preservation",
-            "Session-aware conversation management",
-            "Graceful async stream completion",
-            "Smart memory management without fact extraction bottleneck",
-            "Production-ready architecture",
-            "Flask app compatibility"  # ADDED feature
-        ],
-        "architecture": "standard_fast_logging"
-    }
-
-# Convenience imports for common usage patterns
 def create_research_system(es_client=None, index_name="research-publications-static"):
     """
-    Create a complete research system with all components.
+    Create a complete simplified research system.
     
     Args:
         es_client: Elasticsearch client (optional)
         index_name: Elasticsearch index name
         
     Returns:
-        Configured AgentManager ready for use
+        Configured SimplifiedAgentManager ready for use
     """
     return create_agent_manager(index_name=index_name)
 
-# UPDATED: Print info on import with compatibility status
-def print_startup_info():
-    """Print startup information."""
-    info = get_version_info()
-    print(f"🚀 Research Agent v{info['version']} - {info['status']}")
-    print(f"⚡ Architecture: {info['architecture']}")
-    print(f"🎯 Key features: Fast logging, Clean prompts, Flask compatible")
-    print(f"🔗 Import mode: Hybrid (supports both relative and absolute imports)")
+# Export main classes and functions
+__all__ = [
+    "SimplifiedAgentManager",
+    "SimplifiedMemoryManager", 
+    "ResearchAgent",
+    "create_workflow",
+    "create_agent_manager",
+    "create_memory_manager",
+    "create_research_system",
+    "get_all_tools",
+    "PLANNING_PROMPT_TEMPLATE",
+    "EXECUTION_PROMPT_TEMPLATE", 
+    "REPLANNING_PROMPT_TEMPLATE"
+]
 
-# UPDATED: Enable startup info to show compatibility status
-# print_startup_info()
+# Version info tuple for programmatic access
+VERSION_INFO = tuple(map(int, __version__.split('.')[0].split('-')[0].split('.')))
+
+def get_version_info():
+    """Get detailed version information."""
+    return {
+        "version": __version__,
+        "version_info": VERSION_INFO,
+        "status": "simplified-production-ready",
+        "features": [
+            "Simplified LangGraph plan-and-execute workflow",
+            "LangGraph built-in session management", 
+            "Flexible model configuration system",
+            "External prompt templates (preserved)",
+            "Basic conversation memory",
+            "Streamlined error handling",
+            "Clean, maintainable codebase",
+            "Flask app compatibility"
+        ],
+        "removed_complexity": [
+            "Custom session caching (uses LangGraph's built-in)",
+            "Methodology logger (use LangSmith instead)",
+            "Complex research storage (simplified memory)",
+            "Extensive health checks (basic status only)",
+            "Verbose error handling (clean and simple)"
+        ],
+        "architecture": "simplified_langgraph"
+    }
+
+def print_startup_info():
+    """Print minimal startup information."""
+    info = get_version_info()
+    print(f"Research Agent v{info['version']} initialized")
+
+# Show minimal startup info on import
+print_startup_info()

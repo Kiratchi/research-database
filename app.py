@@ -1,28 +1,29 @@
 """
-Updated Flask Application - Using standard LangGraph implementation
+Simplified Flask Application - Streamlined error handling and health checks
+Removed: Complex health checks, extensive status reporting, verbose error handling
+Kept: Core functionality, basic error handling, simple status endpoint
 """
 
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# UPDATED IMPORT - Use standard implementation with original names
 from research_agent.core.agent_manager import AgentManager
 
 
 def create_app():
-    """Create and configure Flask app with standard LangGraph implementation."""
+    """Create and configure Flask app."""
     app = Flask(__name__)
     
-    # Properly disable Flask sessions entirely
-    app.config['SECRET_KEY'] = None  # No secret key = no session encryption
-    app.config['SESSION_COOKIE_NAME'] = None  # Disable session cookie entirely
+    # Disable Flask sessions
+    app.config['SECRET_KEY'] = None
+    app.config['SESSION_COOKIE_NAME'] = None
     app.config['PERMANENT_SESSION_LIFETIME'] = 0
     
     # Enable CORS
     CORS(app)
     
-    # Initialize the agent manager (now uses standard implementation)
+    # Initialize the agent manager
     agent_manager = AgentManager()
     
     @app.route('/')
@@ -33,30 +34,28 @@ def create_app():
                 with open('index.html', 'r', encoding='utf-8') as f:
                     return f.read()
             else:
-                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p><p><strong>Powered by Standard LangGraph Plan-and-Execute</strong></p>'
+                return '<h1>Research Publications Chat Agent</h1><p>Missing index.html</p>'
         except Exception as e:
             return f'<h1>Error</h1><p>{str(e)}</p>'
 
     @app.route('/status')
     def status():
-        """Get system status."""
+        """Get basic system status."""
         return jsonify(agent_manager.get_status())
 
     @app.route('/health')
     def health():
-        """Health check."""
+        """Simple health check."""
         health_info = agent_manager.health_check()
         
         if health_info["status"] == "healthy":
             return jsonify(health_info), 200
-        elif health_info["status"] == "degraded":
-            return jsonify(health_info), 206
         else:
             return jsonify(health_info), 503
 
     @app.route('/chat/respond', methods=['POST'])
     def chat_respond():
-        """Handle chat requests with standard LangGraph processing."""
+        """Handle chat requests."""
         try:
             data = request.get_json()
             
@@ -75,7 +74,7 @@ def create_app():
                     "error": "Empty message"
                 }), 400
 
-            # Agent manager handles everything
+            # Process query
             result = agent_manager.process_query(query, session_id)
             
             if result['success']:
@@ -84,22 +83,19 @@ def create_app():
                     "response_content": result['response'],
                     "session_id": result['session_id'],
                     "execution_time": result.get('execution_time', 0),
-                    "response_type": result.get('response_type', 'unknown'),
-                    "agent_type": result.get('agent_type', 'standard_langgraph')
+                    "response_type": result.get('response_type', 'unknown')
                 })
             else:
                 return jsonify({
                     "success": False,
                     "error": result['error'],
-                    "session_id": result.get('session_id'),
-                    "agent_type": result.get('agent_type', 'standard_langgraph')
+                    "session_id": result.get('session_id')
                 }), 500
                 
         except Exception as e:
             return jsonify({
                 "success": False, 
-                "error": f"Server error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "error": f"Server error: {str(e)}"
             }), 500
 
     @app.route('/chat/clear-memory', methods=['POST'])
@@ -112,8 +108,7 @@ def create_app():
             if not session_id:
                 return jsonify({
                     "success": False,
-                    "error": "session_id required",
-                    "agent_type": "standard_langgraph"
+                    "error": "session_id required"
                 }), 400
             
             result = agent_manager.clear_memory(session_id)
@@ -126,13 +121,12 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "success": False,
-                "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "error": f"Error: {str(e)}"
             }), 500
 
     @app.route('/chat/session-info/<session_id>')
     def get_session_info(session_id):
-        """Get session information and memory stats."""
+        """Get basic session information."""
         try:
             result = agent_manager.get_session_info(session_id)
             
@@ -144,49 +138,33 @@ def create_app():
         except Exception as e:
             return jsonify({
                 "success": False,
-                "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
-            }), 500
-
-    @app.route('/admin/memory-stats')
-    def memory_stats():
-        """Get memory statistics for all sessions."""
-        try:
-            stats = agent_manager.get_memory_stats()
-            return jsonify(stats)
-        except Exception as e:
-            return jsonify({
-                "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "error": f"Error: {str(e)}"
             }), 500
 
     @app.route('/admin/tools-info')
     def tools_info():
-        """Get detailed information about available tools."""
+        """Get information about available tools."""
         try:
             info = agent_manager.get_tools_info()
             return jsonify(info)
         except Exception as e:
             return jsonify({
-                "error": f"Error: {str(e)}",
-                "agent_type": "standard_langgraph"
+                "error": f"Error: {str(e)}"
             }), 500
 
-    # Error handlers
+    # Simple error handlers
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({
             "success": False,
-            "error": "Endpoint not found",
-            "agent_type": "standard_langgraph"
+            "error": "Endpoint not found"
         }), 404
 
     @app.errorhandler(500)
     def internal_error(error):
         return jsonify({
             "success": False,
-            "error": "Internal server error",
-            "agent_type": "standard_langgraph"
+            "error": "Internal server error"
         }), 500
 
     return app
@@ -197,9 +175,9 @@ if __name__ == '__main__':
     try:
         from dotenv import load_dotenv
         load_dotenv()
-        print("✅ Environment variables loaded")
+        print("Environment variables loaded")
     except ImportError:
-        print("📝 Using system environment variables")
+        print("Using system environment variables")
     except Exception as e:
         print(f"⚠️ Warning loading .env: {e}")
 
@@ -212,17 +190,13 @@ if __name__ == '__main__':
         port = int(os.getenv('FLASK_PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
         
-        print(f"🚀 Starting Research Agent Server (Standard LangGraph)")
-        print(f"🌐 URL: http://{host}:{port}")
-        print(f"🔧 Debug: {debug}")
-        print(f"📝 Sessions: Fully disabled")
-        print(f"⚡ Architecture: Standard LangGraph Plan-and-Execute")
-        print(f"🛠️ Based on: https://langchain-ai.github.io/langgraph/tutorials/plan-and-execute/")
+        print("Research Agent Server starting...")
+        print(f"URL: http://{host}:{port}")
         
         app.run(host=host, port=port, debug=debug, use_reloader=False)
         
     except KeyboardInterrupt:
-        print("\n👋 Server stopped")
+        print("Server stopped")
     except Exception as e:
         print(f"❌ Failed to start: {e}")
         exit(1)
