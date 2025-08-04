@@ -19,6 +19,16 @@ GUIDELINES FOR RESPONSE:
 - No critical information gaps remain in the FULL research content
 - The research objective has been met with rich, detailed findings
 
+
+Markdown style guide for response:
+- Use clear headers (#, ##, ###) to structure information
+- Bold important terms (**text**) for emphasis
+- Use bullet points (- or *) for lists and key findings
+- Format numbers and statistics clearly with bold or emphasis
+- Use blockquotes (>) for important quotes or key insights
+- Create tables when presenting structured data
+- Use horizontal rules (---) to separate major sections when appropriate
+
 GUIDELINES FOR PLAN:
 ⚠️ Continue with plan only when:
 - Important aspects of the query remain genuinely unanswered

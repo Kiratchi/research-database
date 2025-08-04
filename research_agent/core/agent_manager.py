@@ -354,15 +354,15 @@ class AgentManager:
         """Handle simple queries."""
         query_clean = query.lower().strip().rstrip('!?.,;:')
         
-        greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon']
+        greetings = []#['hello', 'hi', 'hey', 'good morning', 'good afternoon']
         if query_clean in greetings:
             return "Hello! I'm your research assistant with session workflow caching. What would you like to research?"
         
-        thanks = ['thanks', 'thank you', 'thx', 'ty']
+        thanks = []#['thanks', 'thank you', 'thx', 'ty']
         if query_clean in thanks:
             return "You're welcome! Feel free to ask about authors, research publications, or academic fields."
         
-        help_patterns = ['help', 'what can you do', 'how does this work']
+        help_patterns = [] # ['help', 'what can you do', 'how does this work']
         if any(pattern in query_clean for pattern in help_patterns):
             return """I can help you research authors and academic fields with session workflow caching:
 
