@@ -7,11 +7,21 @@ CURRENT TASK: {task}
 PREVIOUS RESEARCH CONTEXT:
 {research_context}
 
+**CONTEXT-AWARE EXECUTION:**
+The previous research context contains information from our ongoing conversation. Use this context to:
+- Understand references to people, publications, or topics mentioned earlier
+- Avoid asking for clarification when the context already provides the answer
+- Build upon previous research findings rather than starting from scratch
+- Connect current research to information already discovered
+
 INSTRUCTIONS:
+- Use the previous research context to understand references and avoid duplicating research
+- If the query refers to people/topics mentioned in the context, use that information as your starting point
 - Use the available research tools to gather specific, detailed information
 - Focus on concrete findings: names, numbers, dates, affiliations, publications
 - Look for patterns in research areas, collaboration networks, and publication trends
 - Provide comprehensive results with supporting evidence
 - Be thorough in your search and analysis
+- Connect your findings to the broader conversation context when relevant
 
 Execute this task now using the available tools.

@@ -2,6 +2,7 @@
 Balanced Simplified Agent Manager - Removes bloat but keeps safety features
 Kept: Timeout protection, thread isolation, graceful cleanup
 Removed: Verbose logging, complex status, extensive error handling
+FIXED: Memory manager persistence issue
 """
 
 import os
@@ -12,7 +13,7 @@ import concurrent.futures
 from typing import Dict, Any, Optional
 from elasticsearch import Elasticsearch
 
-from .memory_manager import MemoryManager
+from .memory_singleton import get_global_memory_manager
 from .workflow import ResearchAgent
 
 # Import tools
@@ -31,9 +32,11 @@ class AgentManager:
         self.query_stats = {"total": 0, "success": 0, "failed": 0}
         
         self.es_client = self._init_elasticsearch()
-        self.memory_manager = MemoryManager()
         
-        print("AgentManager initialized")
+        # ✅ FIXED: Create ONE memory manager instance that persists
+        self.memory_manager = self.memory_manager = get_global_memory_manager()
+        
+        print("AgentManager initialized with global memory")
     
     def _init_elasticsearch(self) -> Optional[Elasticsearch]:
         """Initialize Elasticsearch client."""
@@ -68,6 +71,7 @@ class AgentManager:
             # Handle simple queries
             simple_response = self._handle_simple_query(query)
             if simple_response:
+                # ✅ FIXED: Use the persistent memory manager
                 self.memory_manager.save_conversation(session_id, query, simple_response)
                 self.query_stats["success"] += 1
                 return {
@@ -88,10 +92,12 @@ class AgentManager:
                 }
             
             # Execute research workflow with safety features
+            # ✅ FIXED: Use the persistent memory manager
             conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
             response_content = self._execute_research_safely(query, conversation_history, session_id)
             
             if response_content:
+                # ✅ FIXED: Use the persistent memory manager
                 self.memory_manager.save_conversation(session_id, query, response_content)
                 self.query_stats["success"] += 1
                 print(f"Research completed in {time.time() - start_time:.1f}s")
@@ -145,11 +151,12 @@ Just ask me about any researcher or academic field!"""
             asyncio.set_event_loop(loop)
             
             try:
-                # Create and compile agent
+                # ✅ FIXED: Create and compile agent with the persistent memory manager
                 agent = ResearchAgent(
                     es_client=self.es_client,
                     index_name=self.index_name,
-                    recursion_limit=50
+                    recursion_limit=50,
+                    memory_manager=self.memory_manager  # ✅ Pass the persistent memory manager
                 )
                 agent._compile_agent(session_id)
                 
@@ -225,6 +232,7 @@ Just ask me about any researcher or academic field!"""
     def clear_memory(self, session_id: str) -> Dict[str, Any]:
         """Clear memory for session."""
         try:
+            # ✅ FIXED: Use the persistent memory manager
             self.memory_manager.clear_session_memory(session_id)
             return {"success": True, "message": f"Cleared memory for session: {session_id}"}
         except Exception as e:
@@ -233,6 +241,7 @@ Just ask me about any researcher or academic field!"""
     def get_session_info(self, session_id: str) -> Dict[str, Any]:
         """Get basic session information."""
         try:
+            # ✅ FIXED: Use the persistent memory manager
             history = self.memory_manager.get_conversation_history_for_state(session_id)
             return {
                 "success": True,

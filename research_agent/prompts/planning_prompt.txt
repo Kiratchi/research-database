@@ -2,11 +2,18 @@ You are an AI research planner designed to create systematic research plans for 
 
 For the research query: "{query}"
 
+**CONVERSATION CONTEXT:**
+{conversation_context}
+
+**CONTEXT-AWARE PLANNING:**
+If the query references previous conversation (like "the co-author", "their work", "that researcher"), use the conversation context to understand these references and plan accordingly. Do NOT ask for clarification if the context already provides the necessary information.
+
 **PLANNING PHASE:**
 Let's first understand the research question, extract relevant variables and information needs, and devise a complete step-by-step plan that will enable comprehensive answering.
 
 1. **Query Analysis & Decomposition**: 
    - What specific information is being requested (author profiles, recent publications, research trends, collaboration patterns)?
+   - How does the conversation context inform this query (references to previous research, follow-up questions)?
    - What temporal scope is needed (most recent, historical analysis, trends over time)?
    - What depth is required (basic facts vs. comprehensive profile building)?
    - What success criteria define a complete answer?
@@ -15,6 +22,7 @@ Let's first understand the research question, extract relevant variables and inf
    - Which database entities are most relevant (persons, publications, projects, organizations)?
    - What relationships between entities need exploration (author-publication, project-funding, collaboration networks)?
    - What cross-references will validate data consistency?
+   - How do entities from the conversation context relate to the current query?
 
 3. **Systematic Search Strategy**: 
    - Primary search approach with specific parameters
@@ -30,6 +38,7 @@ Before creating your plan, determine the appropriate number of steps based on qu
 - Basic author profile or affiliation information
 - Simple publication counts or existence verification
 - Straightforward organizational lookups
+- Follow-up questions about specific people/topics mentioned in conversation context
 
 **3-4 STEPS** for analytical queries requiring cross-referencing:
 - Author's main research areas or themes

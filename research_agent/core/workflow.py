@@ -1,7 +1,6 @@
 """
- Workflow - Keeps model configuration flexibility, removes complex session caching
-Uses LangGraph's built-in session management instead of custom caching
-MINIMAL LOGGING VERSION
+ Workflow - FIXED MEMORY AND CONTEXT HANDLING
+ Addresses: Truncation, missing context in planner/replanner, poor context usage
 """
 
 from typing import Dict, Any, List, Optional, Literal
@@ -18,9 +17,8 @@ import asyncio
 import time
 from dotenv import load_dotenv
 
-# Import tools and memory
+# Import tools
 from ..tools import get_all_tools
-from .memory_manager import MemoryManager
 
 # Import prompts from external files
 from ..prompts import (
@@ -73,6 +71,79 @@ class Act(BaseModel):
     )
 
 # =============================================================================
+# CONTEXT HELPER FUNCTIONS
+# =============================================================================
+
+def get_conversation_context(memory_manager, session_id: str, max_length: int = 2000) -> str:
+    """Get conversation context with proper length management."""
+    if not session_id or not memory_manager:
+        return "No previous conversation context available."
+    
+    try:
+        history = memory_manager.get_conversation_history_for_state(session_id)
+        if not history:
+            return "No previous conversation context available."
+        
+        # Build context from most recent messages, staying within max_length
+        context_parts = []
+        current_length = 0
+        
+        # Start from most recent and work backwards
+        for msg in reversed(history):
+            role = msg["role"].title()
+            content = msg["content"]
+            
+            # Estimate the length we'll add
+            new_part = f"- {role}: {content}\n"
+            new_length = current_length + len(new_part)
+            
+            # If adding this would exceed max_length, truncate smartly
+            if new_length > max_length:
+                remaining_space = max_length - current_length - len(f"- {role}: ") - 20  # Leave space for truncation indicator
+                if remaining_space > 100:  # Only add if we have meaningful space
+                    truncated_content = content[:remaining_space] + "..."
+                    context_parts.insert(0, f"- {role}: {truncated_content}")
+                break
+            
+            context_parts.insert(0, new_part.strip())
+            current_length = new_length
+        
+        context = "\n".join(context_parts)
+        print(f"🔍 Context built: {len(context)} chars from {len(context_parts)} messages")
+        return context
+        
+    except Exception as e:
+        print(f"❌ Error getting conversation context: {e}")
+        return "Error retrieving conversation context."
+
+def format_conversation_summary(memory_manager, session_id: str) -> str:
+    """Get a concise summary of conversation for planning/replanning."""
+    if not session_id or not memory_manager:
+        return "No conversation history."
+    
+    try:
+        history = memory_manager.get_conversation_history_for_state(session_id)
+        if not history:
+            return "No conversation history."
+        
+        # Get last 2 Q&A pairs for planning context
+        recent_messages = history[-4:] if len(history) >= 4 else history
+        
+        summary_parts = []
+        for i in range(0, len(recent_messages), 2):
+            if i + 1 < len(recent_messages):
+                user_msg = recent_messages[i]["content"]
+                assistant_msg = recent_messages[i + 1]["content"]
+                summary_parts.append(f"Q: {user_msg}")
+                summary_parts.append(f"A: {assistant_msg}")
+        
+        return "\n".join(summary_parts)
+        
+    except Exception as e:
+        print(f"❌ Error getting conversation summary: {e}")
+        return "Error retrieving conversation summary."
+
+# =============================================================================
 # LANGSMITH SETUP
 # =============================================================================
 
@@ -102,7 +173,7 @@ def setup_langsmith(session_id: str = None):
     return True
 
 # =============================================================================
-# MODEL CONFIGURATION SYSTEM (KEPT AS REQUESTED)
+# MODEL CONFIGURATION SYSTEM
 # =============================================================================
 
 def create_llm_with_config(purpose: str, session_id: str = None) -> ChatLiteLLM:
@@ -123,7 +194,7 @@ def create_llm_with_config(purpose: str, session_id: str = None) -> ChatLiteLLM:
             "description": "Execution model - tool interaction and research"
         },
         "replanning": {
-            "model": "anthropic/claude-sonnet-4",
+            "model": "anthropic/claude-sonnet-3.7",
             "temperature": 0,
             "max_tokens": 3000,
             "description": "Replanning model - critical decision making"
@@ -168,7 +239,8 @@ def create_llm_with_config(purpose: str, session_id: str = None) -> ChatLiteLLM:
 def create_workflow(
     es_client=None, 
     index_name: str = "research-publications-static", 
-    session_id: str = None
+    session_id: str = None,
+    memory_manager=None
 ) -> StateGraph:
     """Create research workflow with configured models."""
     
@@ -181,8 +253,16 @@ def create_workflow(
     else:
         tools = get_all_tools()
     
-    # Initialize memory
-    memory_manager = MemoryManager()
+    # ✅ FIXED: Use provided memory manager
+    if memory_manager is None:
+        try:
+            from .memory_singleton import get_global_memory_manager
+            memory_manager = get_global_memory_manager()
+            print("✅ Using global memory manager singleton")
+        except ImportError:
+            from .memory_manager import MemoryManager
+            memory_manager = MemoryManager()
+            print("⚠️ Warning: Using fallback MemoryManager")
     
     # Create LLMs with configured models
     planning_llm = create_llm_with_config("planning", session_id)
@@ -194,20 +274,25 @@ def create_workflow(
     # =============================================================================
     
     def plan_step(state: PlanExecuteState):
-        """Planning step using the configured planning model."""
+        """Planning step with conversation context."""
         try:
             query = state["input"]
-            conversation_history = state.get("conversation_history", [])
             session_id = state.get("session_id", f"fallback_{int(time.time())}")
+            
+            # ✅ FIXED: Include conversation context in planning
+            conversation_summary = format_conversation_summary(memory_manager, session_id)
             
             # Format tool information
             tool_descriptions = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
             
-            # Use external prompt template
+            # ✅ UPDATED: Include conversation context in planning prompt
             planning_prompt_text = PLANNING_PROMPT_TEMPLATE.format(
                 query=query,
-                tool_descriptions=tool_descriptions
+                tool_descriptions=tool_descriptions,
+                conversation_context=conversation_summary  # Add this to your planning template
             )
+            
+            print(f"🔍 PLANNING with context: {conversation_summary[:200]}...")
             
             # Create planner
             planner_prompt = ChatPromptTemplate.from_template(planning_prompt_text)
@@ -221,6 +306,7 @@ def create_workflow(
             }
             
         except Exception as e:
+            print(f"❌ Planning error: {e}")
             fallback_plan = [f"Research comprehensive information about: {query}"]
             return {
                 "plan": fallback_plan,
@@ -228,7 +314,7 @@ def create_workflow(
             }
     
     def execute_step(state: PlanExecuteState):
-        """Execution step using the configured execution model."""
+        """Execution step with full conversation context."""
         try:
             plan = state["plan"]
             past_steps = state.get("past_steps", [])
@@ -240,27 +326,17 @@ def create_workflow(
             task = plan[0]
             original_query = state.get("input", "")
             
-            # Get conversation context from memory
-            conversation_context = ""
-            if session_id:
-                try:
-                    history = memory_manager.get_conversation_history_for_state(session_id)
-                    if history:
-                        recent_messages = history[-4:]  # Last 2 Q&A pairs
-                        context_parts = []
-                        for msg in recent_messages:
-                            role = msg["role"].title()
-                            content = msg["content"][:200] + "..." if len(msg["content"]) > 200 else msg["content"]
-                            context_parts.append(f"- {role}: {content}")
-                        conversation_context = "\n".join(context_parts)
-                except Exception as e:
-                    pass
+            # ✅ FIXED: Get full conversation context without truncation issues
+            conversation_context = get_conversation_context(memory_manager, session_id, max_length=10000)
+            
+            print(f"🔍 EXECUTION with context length: {len(conversation_context)} chars")
+            print(f"🔍 Context preview: {conversation_context[:300]}...")
             
             # Use external prompt template
             execution_prompt = EXECUTION_PROMPT_TEMPLATE.format(
                 original_query=original_query,
                 task=task,
-                research_context=conversation_context or "No previous research context available."
+                research_context=conversation_context
             )
             
             # Execute
@@ -295,6 +371,7 @@ def create_workflow(
             return {"past_steps": updated_past_steps}
         
         except Exception as e:
+            print(f"❌ Execution error: {e}")
             error_response = f"Error executing task: {str(e)}"
             
             task = plan[0] if plan else "unknown_task"
@@ -302,11 +379,14 @@ def create_workflow(
             return {"past_steps": updated_past_steps}
     
     def replan_step(state: PlanExecuteState):
-        """Replanning step using the configured replanning model."""
+        """Replanning step with conversation context."""
         try:
             session_id = state.get("session_id")
             original_plan = state.get("plan", [])
             past_steps = state.get("past_steps", [])
+            
+            # ✅ FIXED: Include conversation context in replanning
+            conversation_summary = format_conversation_summary(memory_manager, session_id)
             
             # Create research summary from past steps
             research_summary = "No research completed yet."
@@ -318,12 +398,15 @@ def create_workflow(
                     summary_parts.append(f"Step {i}: {task}\nResult: {result_preview}")
                 research_summary = "\n\n".join(summary_parts)
             
-            # Use external prompt template
+            # ✅ UPDATED: Include conversation context in replanning prompt
             replanning_prompt = REPLANNING_PROMPT_TEMPLATE.format(
                 original_objective=state["input"],
                 original_plan=original_plan,
-                research_summary=research_summary
+                research_summary=research_summary,
+                conversation_context=conversation_summary  # Add this to your replanning template
             )
+            
+            print(f"🔍 REPLANNING with context: {conversation_summary[:200]}...")
             
             # Create replanner
             replanner_prompt_obj = ChatPromptTemplate.from_template(replanning_prompt)
@@ -351,6 +434,7 @@ def create_workflow(
                 return {"plan": response.steps or []}
                 
         except Exception as e:
+            print(f"❌ Replanning error: {e}")
             # Create fallback response from past steps
             if state.get("past_steps"):
                 last_result = state["past_steps"][-1][1]
@@ -397,15 +481,17 @@ def create_workflow(
 class ResearchAgent:
     """Research Agent using LangGraph's session management."""
     
-    def __init__(self, es_client=None, index_name: str = "research-publications-static", recursion_limit: int = 50):
+    def __init__(self, es_client=None, index_name: str = "research-publications-static", 
+                 recursion_limit: int = 50, memory_manager=None): 
         self.es_client = es_client
         self.index_name = index_name
         self.recursion_limit = recursion_limit
+        self.memory_manager = memory_manager
         self.app = None
 
     def _compile_agent(self, session_id: str = None):
         """Compile agent for session."""
-        workflow = create_workflow(self.es_client, self.index_name, session_id)
+        workflow = create_workflow(self.es_client, self.index_name, session_id, self.memory_manager)
         self.app = workflow.compile()
 
     async def stream_query_without_recompile(self, query: str, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None):
@@ -457,7 +543,7 @@ class ResearchAgent:
 
 
 if __name__ == "__main__":
-    print("Testing simplified workflow with configured models...")
+    print("Testing workflow with fixed memory and context handling...")
     
     try:
         from dotenv import load_dotenv
