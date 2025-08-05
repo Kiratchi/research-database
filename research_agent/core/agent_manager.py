@@ -123,7 +123,7 @@ class AgentManager:
             }
 
     async def _execute_research_async(self, query: str, conversation_history, session_id: str) -> str:
-        """Direct async research execution - no threads, no event loop management."""
+        """Direct async research execution with proper generator consumption."""
         
         try:
             # Create agent with working memory manager
@@ -135,20 +135,31 @@ class AgentManager:
             )
             agent._compile_agent(session_id)
             
-            # Direct async streaming - no complex threading
+            # Collect all events without breaking early to avoid GeneratorExit
             response_content = ""
-            async for event_data in agent.stream_query(query, conversation_history, session_id):
-                if isinstance(event_data, dict):
-                    for node_name, node_data in event_data.items():
-                        # Look for ReAct response
-                        if node_name in ["__end__", "react"] and isinstance(node_data, dict):
-                            if "response" in node_data:
-                                response_content = node_data["response"]
-                                break
+            all_events = []
+            
+            try:
+                async for event_data in agent.stream_query(query, conversation_history, session_id):
+                    all_events.append(event_data)
                     
-                    # Break out of outer loop if we found response
-                    if response_content:
-                        break
+                    if isinstance(event_data, dict):
+                        for node_name, node_data in event_data.items():
+                            # Look for ReAct response but don't break - let generator finish
+                            if node_name in ["__end__", "react"] and isinstance(node_data, dict):
+                                if "response" in node_data:
+                                    response_content = node_data["response"]
+                
+                # Generator completed naturally - no GeneratorExit
+                print(f"Stream completed naturally with {len(all_events)} events")
+                
+            except GeneratorExit:
+                # Should not happen anymore, but keep as safety net
+                print("Generator cleanup detected - this is normal")
+                pass
+            except Exception as stream_error:
+                print(f"Streaming error: {stream_error}")
+                return f"Streaming error: {str(stream_error)}"
             
             return response_content or "Research completed successfully."
             

@@ -13,46 +13,17 @@ class PublicationsSearchTool(BaseElasticsearchSearchTool):
     name: str = "search_publications"
     description: str = """Search for academic publications in the Chalmers research database.
     
-    PRIMARY USE: This is your MAIN tool for finding research on ANY TOPIC!
+    This is the primary tool for discovering research on any topic, finding prolific authors,
+    and analyzing research trends. Searches are performed across title, abstract, and keywords
+    using relevance scoring.
     
-    WHEN TO USE THIS TOOL FIRST:
-    ✓ "What research is being done on [topic]?" → search_publications(query="topic")
-    ✓ "Who are the leading researchers in [field]?" → search_publications(query="field") then analyze authors
-    ✓ "Find papers about [subject]" → search_publications(query="subject")
-    ✓ "Recent work on [topic]" → search_publications(query="topic", year_from=2020)
+    For finding researchers by expertise: search publications on a topic first, then analyze
+    the authors in results. Use faceting for automatic author frequency analysis.
     
-    SEARCH STRATEGIES:
-    - For TOPICS: Use query parameter (e.g., query="quantum computing")
-    - For SPECIFIC AUTHORS: Use authors parameter (e.g., authors=["John Doe"])
-    - For BOTH: Can combine (e.g., query="AI", authors=["Smith"])
+    Input can be keywords, author names, or filter combinations.
     
-    FINDING RESEARCHERS BY FIELD:
-    1. First: search_publications(query="quantum computing", max_results=20)
-    2. Then: Analyze the author names in results
-    3. Finally: Use search_persons(query="Author Name") for specific researcher details
-    
-    PARAMETERS:
-    - query: Keywords to search (searches title, abstract, keywords)
-    - authors: List of author names (exact matching)
-    - year_from/year_to: Filter by publication year
-    - publication_type: Filter by type (article, conference paper, etc.)
-    - max_results: Start with 10-20 for researcher discovery
-    
-    BEST PRACTICES:
-    - Start with max_results=10-20 for topic exploration
-    - Only use field_selection="expanded" if you need abstracts or full author details
-    - For "leading researchers", get 20-30 publications and analyze author frequency
-    
-    FACETING (NEW):
-    - Use include_facets=["authors"] to get top authors by publication count
-    - Use include_facets=["organizations", "years"] for department/timeline analysis
-    - Available facets: authors, organizations, years, types, keywords
-    
-    RETURNS: List of publications, each containing:
-    - Standard: (id, title, year, publication_type, source_title, author_names[], author_count, score)
-    - Expanded: + (abstract, keywords[], doi, scopus_id, authors[(name, affiliation)], is_open_access)
-    - Full: + (all_identifiers, persons[], organizations[], categories[], data_objects[])
-    - facets (if requested): (top_authors[], top_organizations[], publication_years[], etc.)
+    Note: Zero results may indicate overly specific search terms. Try broader concepts.
+    If no results found, respond with helpful suggestions for alternative searches.
     """
     
     args_schema: Type[PublicationsSearchInput] = PublicationsSearchInput

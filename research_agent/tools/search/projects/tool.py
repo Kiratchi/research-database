@@ -14,48 +14,16 @@ class ProjectsSearchTool(BaseElasticsearchSearchTool):
     name: str = "search_projects"
     description: str = """Search for research projects and grants in the Chalmers database.
     
-    USE THIS TOOL WHEN:
-    ✓ Looking for funded research projects on a topic
-    ✓ Finding collaborations with specific companies/funders
-    ✓ Checking active/ongoing research initiatives
-    ✓ Analyzing research funding patterns
+    Useful for finding funded research initiatives, industry collaborations, and analyzing
+    research funding patterns. Complements publication searches by showing ongoing/future work.
     
-    COMPLEMENTARY TO PUBLICATIONS:
-    - Publications show completed research → Projects show ongoing/future work
-    - Use BOTH for complete picture: search_publications() AND search_projects()
+    Searches are performed across project titles and descriptions using relevance scoring.
+    Can filter by funder, status, funding amount, and date ranges. Use faceting for funding analysis.
     
-    SEARCH STRATEGIES:
-    - By topic: search_projects(query="quantum computing")
-    - By funder: search_projects(funder="VINNOVA") or search_projects(query="Volvo")
-    - By status: search_projects(status="active") for current work
-    - By funding: search_projects(min_funding=5000000) for major projects
+    Input can be keywords, funder names, or filter combinations.
     
-    PARAMETERS:
-    - query: Search in project titles and descriptions
-    - funder: Filter by funding organization name
-    - status: "active", "completed", or "all"
-    - year_from/year_to: Project start date range
-    - min_funding/max_funding: Funding amount in SEK
-    
-    TYPICAL WORKFLOW:
-    1. "What research on X?" → search_publications(query="X") + search_projects(query="X")
-    2. "Industry collaboration?" → search_projects(query="company_name")
-    3. "Well-funded areas?" → search_projects(query="topic", min_funding=5000000)
-    
-    BEST PRACTICES:
-    - Start with max_results=10 for initial searches
-    - Only use field_selection="expanded" if you need full project descriptions
-    
-    FACETING (NEW):
-    - Use include_facets=["funders"] to analyze funding patterns
-    - Use include_facets=["organizations", "status"] for department/status distribution
-    - Available facets: funders, organizations, years, status, pis
-    
-    RETURNS: List of projects, each containing:
-    - Standard: (id, title, start_date, end_date, status, total_funding, currency, pi_name, score)
-    - Expanded: + (description, funder_names[], participant_count, participant_names[], organization_count)
-    - Full: + (title_swe, description_full, contracts[], persons[], organizations[], keywords[])
-    - facets (if requested): (top_funders[], top_organizations[], project_status[], etc.)
+    Note: Zero results may indicate overly specific search terms. Try broader concepts.
+    If no results found, respond with helpful suggestions for alternative searches.
     """
     
     args_schema: Type[ProjectsSearchInput] = ProjectsSearchInput

@@ -13,13 +13,14 @@ class PublicationsSearchInput(BaseSearchInput):
     
     # Override query field to emphasize this is the main research tool
     query: str = Field(
-        description="""Search for research topics, keywords, or paper titles. Required.
+        default="",
+        description="""Search for research topics, keywords, or paper titles. Default: empty string.
         
         THIS IS YOUR MAIN RESEARCH TOOL! Use for:
         - Research topics: "quantum computing", "machine learning", "sustainability"
         - Specific papers: "neural networks for image recognition"
         - Research areas: "autonomous vehicles", "AI in healthcare"
-        - Empty string "" to list all (use with filters)
+        - Empty string "" to list all (use with filters like authors, year, organization)
         
         TO FIND LEADING RESEARCHERS:
         1. search_publications(query="quantum computing", max_results=20-30)

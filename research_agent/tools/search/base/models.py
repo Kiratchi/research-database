@@ -28,14 +28,15 @@ class BaseSearchInput(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
     
     query: str = Field(
-        description="""The search query. This is the ONLY required field.
+        default="",
+        description="""The search query. Default: empty string.
         
         Examples:
         - "machine learning"
         - "John Doe"  
         - "quantum computing"
         
-        For empty searches (e.g., list all), use an empty string: ""
+        For empty searches (e.g., list all with filters), use an empty string: ""
         """
     )
     

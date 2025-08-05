@@ -1,5 +1,6 @@
 """Persons search tool implementation."""
 from typing import Dict, Any, List, Optional, Type
+import re
 
 from ..base.elasticsearch_tool import BaseElasticsearchSearchTool
 from .models import PersonsSearchInput, PersonStandard, PersonExpanded, PersonFull
@@ -9,40 +10,125 @@ class PersonsSearchTool(BaseElasticsearchSearchTool):
     """Search tool for researcher profiles."""
     
     name: str = "search_persons"
-    description: str = """Search for researchers/persons in the Chalmers academic database BY NAME ONLY.
+    description: str = """Search for researchers by name in the Chalmers academic database.
     
-    CRITICAL: This tool searches ONLY by person names, NOT by research topics or fields!
+    This tool searches ONLY by person names, NOT by research topics or expertise areas.
+    For finding researchers in specific fields, use search_publications first to identify authors.
     
-    WHEN TO USE THIS TOOL:
-    ✓ You know a specific person's name (e.g., "Find John Doe")
-    ✓ You want all researchers in a department (e.g., organization="Physics")
-    ✓ You need researcher identifiers (ORCID, Scopus ID)
+    The tool automatically handles name variations, special characters, and different formats.
     
-    WHEN NOT TO USE THIS TOOL:
-    ✗ Finding "researchers in quantum computing" → Use search_publications first, then extract author names
-    ✗ Finding "leading AI researchers" → Use search_publications to find prolific authors
-    ✗ Any query about research topics → This tool CANNOT search by research field
-    
-    CORRECT USAGE:
-    - search_persons(query="John Doe") → Find specific person
-    - search_persons(query="", organization="Computer Science") → All CS researchers
-    - search_persons(query="Smith", has_publications=true) → All Smiths with publications
-    
-    INCORRECT USAGE:
-    - search_persons(query="machine learning") → Will return 0 results
-    - search_persons(query="quantum computing") → Will return 0 results
-    
-    BEST PRACTICES:
-    - Start with max_results=5-10 for initial searches
-    - Only use field_selection="expanded" if you specifically need ORCID, Scopus ID, or organization details
-    
-    RETURNS: List of persons, each containing:
-    - Standard: (id, display_name, first_name, last_name, is_active, has_publications, has_orcid, score)
-    - Expanded: + (email, phone, identifiers(orcid, scopus_id), organizations[(name, unit)], publication_count)
-    - Full: + (all contact info, all_identifiers, all_organizations, detailed_profile)
+    Input should be a person's name or use filters for department-wide searches.
     """
     
     args_schema: Type[PersonsSearchInput] = PersonsSearchInput
+    
+    def _normalize_name(self, name: str) -> List[str]:
+        """Generate name variants for searching."""
+        variants = [name]
+        
+        # Handle special Nordic characters
+        nordic_replacements = {
+            'ä': 'a', 'Ä': 'A',
+            'ö': 'o', 'Ö': 'O', 
+            'å': 'a', 'Å': 'A',
+            'æ': 'ae', 'Æ': 'AE',
+            'ø': 'o', 'Ø': 'O'
+        }
+        
+        # Create variant without special characters
+        normalized = name
+        for old, new in nordic_replacements.items():
+            normalized = normalized.replace(old, new)
+        if normalized != name:
+            variants.append(normalized)
+        
+        # Handle hyphens
+        if '-' in name:
+            variants.append(name.replace('-', ' '))
+            variants.append(name.replace('-', ''))
+        
+        # Try last name first format if it looks like a full name
+        parts = name.split()
+        if len(parts) >= 2:
+            # Standard "Last, First" format
+            variants.append(f"{parts[-1]}, {' '.join(parts[:-1])}")
+            # Also try "Last First" without comma
+            variants.append(f"{parts[-1]} {' '.join(parts[:-1])}")
+        
+        return list(set(variants))  # Remove duplicates
+    
+    def _build_person_query(self, query: str) -> Dict[str, Any]:
+        """Build multi-strategy person name query."""
+        strategies = []
+        
+        # Strategy 1: Full name search with fuzzy matching
+        strategies.append({
+            "multi_match": {
+                "query": query,
+                "fields": ["DisplayName^3", "DisplayName.keyword^5"],
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+                "prefix_length": 2
+            }
+        })
+        
+        # Strategy 2: Traditional multi-match with OR
+        strategies.append({
+            "multi_match": {
+                "query": query,
+                "fields": [
+                    "DisplayName^3",
+                    "FirstName^2", 
+                    "LastName^2"
+                ],
+                "type": "best_fields",
+                "operator": "or",
+                "minimum_should_match": "75%"
+            }
+        })
+        
+        # Strategy 3: Parse name and search components
+        parts = query.split()
+        if len(parts) >= 2:
+            # Try matching first and last name separately
+            strategies.append({
+                "bool": {
+                    "should": [
+                        # First Last order
+                        {
+                            "bool": {
+                                "must": [
+                                    {"match": {"FirstName": " ".join(parts[:-1])}},
+                                    {"match": {"LastName": parts[-1]}}
+                                ]
+                            }
+                        },
+                        # Last First order
+                        {
+                            "bool": {
+                                "must": [
+                                    {"match": {"LastName": parts[0]}},
+                                    {"match": {"FirstName": " ".join(parts[1:])}}
+                                ]
+                            }
+                        }
+                    ]
+                }
+            })
+        
+        # Strategy 4: Try name variants
+        name_variants = self._normalize_name(query)
+        if len(name_variants) > 1:
+            for variant in name_variants[1:]:  # Skip original
+                strategies.append({
+                    "multi_match": {
+                        "query": variant,
+                        "fields": ["DisplayName^2", "DisplayName.keyword^3"],
+                        "type": "best_fields"
+                    }
+                })
+        
+        return {"bool": {"should": strategies}}
     
     def _build_search_request(
         self,
@@ -65,21 +151,9 @@ class PersonsSearchTool(BaseElasticsearchSearchTool):
         must_clauses = []
         filter_clauses = []
         
-        # Main query - search in name fields
+        # Main query - use multi-strategy person search
         if query:
-            must_clauses.append({
-                "multi_match": {
-                    "query": query,
-                    "fields": [
-                        "DisplayName^3",
-                        "FirstName^2", 
-                        "LastName^2",
-                        "DisplayName.keyword"
-                    ],
-                    "type": "best_fields",
-                    "operator": "and"
-                }
-            })
+            must_clauses.append(self._build_person_query(query))
         
         # Apply filters
         if filters.get('active_only', True):

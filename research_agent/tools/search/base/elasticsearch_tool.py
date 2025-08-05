@@ -31,7 +31,7 @@ class BaseElasticsearchSearchTool(BaseTool, ABC):
     
     def _run(
         self,
-        query: str,
+        query: str = "",
         max_results: int = 10,
         offset: int = 0,
         sort_by: str = "relevance",

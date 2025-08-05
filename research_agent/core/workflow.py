@@ -302,7 +302,7 @@ class ResearchAgent:
         self.app = workflow.compile()
 
     async def stream_query(self, query: str, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None):
-        """Stream query using ReAct workflow."""
+        """Stream query using ReAct workflow with proper cleanup."""
         
         session_id = frontend_session_id or f"fallback_{str(uuid.uuid4())}"
         
@@ -334,11 +334,19 @@ class ResearchAgent:
         }
         
         try:
-            async for event in self.app.astream(initial_state, config=config):
+            # Use astream with proper async context handling
+            stream = self.app.astream(initial_state, config=config)
+            
+            async for event in stream:
                 print(f"Streaming event: {list(event.keys())}")
                 if 'react' in event and 'response' in event['react']:
                     print(f"Found response in event: {event['react']['response'][:100]}...")
                 yield event
+                
+        except GeneratorExit:
+            # Handle generator cleanup gracefully
+            print("Stream generator cleanup - this is normal")
+            pass
         except Exception as e:
             print(f"Streaming error: {e}")
             yield {"error": {"error": str(e)}}
