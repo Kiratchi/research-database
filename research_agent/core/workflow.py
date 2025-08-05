@@ -18,15 +18,14 @@ import time
 from dotenv import load_dotenv
 
 # Import tools
-from ..tools import get_all_tools
+from research_agent.tools import get_all_tools
 
-# Import prompts from external files
-from ..prompts import (
+# Import prompts
+from research_agent.prompts import (
     PLANNING_PROMPT_TEMPLATE,
     EXECUTION_PROMPT_TEMPLATE, 
     REPLANNING_PROMPT_TEMPLATE
 )
-
 # =============================================================================
 # STATE SCHEMA
 # =============================================================================
@@ -394,7 +393,7 @@ def create_workflow(
                 summary_parts = []
                 for i, (task, result) in enumerate(past_steps, 1):
                     # Truncate long results for summary
-                    result_preview = result[:500] + "..." if len(result) > 500 else result
+                    result_preview = result[:5000] + "..." if len(result) > 5000 else result
                     summary_parts.append(f"Step {i}: {task}\nResult: {result_preview}")
                 research_summary = "\n\n".join(summary_parts)
             

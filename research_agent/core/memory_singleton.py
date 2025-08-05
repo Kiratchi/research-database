@@ -81,7 +81,6 @@ class GlobalMemoryManager:
             elif isinstance(msg, AIMessage):
                 conversation_history.append({"role": "assistant", "content": msg.content})
         
-        print(f"📚 Retrieved {len(conversation_history)} messages for session: {session_id}")
         return conversation_history
     
     def clear_session_memory(self, session_id: str):
