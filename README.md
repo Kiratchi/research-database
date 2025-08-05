@@ -1,285 +1,241 @@
 # Research Publications Chat Agent
 
-An intelligent conversational AI system for exploring and analyzing research publications from Chalmers University of Technology's research database ([chalmers.research.se](https://chalmers.research.se)).
+A conversational AI system for searching and analyzing research publications from Chalmers University of Technology's research database ([chalmers.research.se](https://chalmers.research.se)).
 
-## 🎯 Overview
+## Overview
 
-This project provides a natural language interface to search, analyze, and explore academic publications, enabling researchers and students to easily discover information about:
+This application provides a natural language interface to the Chalmers research database, enabling users to query information about authors, publications, research projects, and institutional data through conversational interactions.
 
-- **Authors and researchers** - Find publications, research areas, and collaboration patterns
-- **Research topics** - Discover papers, trends, and developments in specific fields  
-- **Publication statistics** - Get counts, trends, and analytical insights
-- **Institutional research** - Explore Chalmers' research output and impact
+**Primary capabilities:**
+- Author and researcher information lookup
+- Publication search and analysis
+- Research project and funding information
+- Statistical analysis of research output
+- Multi-turn conversational queries with context retention
 
-## ✨ Key Features
+## Technical Architecture
 
-### 🧠 **Intelligent Query Processing**
-- **Natural Language Understanding** - Ask questions in plain English
-- **Context-Aware Conversations** - Follow-up questions remember previous context
-- **Multi-Turn Interactions** - Build complex queries through conversation
+**Backend Framework:** Quart (async Flask) for high-performance asynchronous request handling  
+**AI Workflow:** LangGraph implementing ReAct (Reasoning and Acting) pattern  
+**Language Model:** Claude 3.7 Sonnet via LiteLLM proxy  
+**Database:** Elasticsearch containing Chalmers research data  
+**Memory Management:** Global singleton pattern with automatic session cleanup  
+**Frontend:** Responsive web interface with markdown rendering support  
 
-### 🔍 **Advanced Research Capabilities**
-- **Author Analysis** - Comprehensive profiles including publications, trends, and collaborations
-- **Topic Exploration** - Deep dives into research fields and themes
-- **Statistical Insights** - Publication counts, temporal trends, and distributions
-- **Smart Search** - Handles ambiguous queries and provides relevant suggestions
-
-### 🛠️ **Research Tools Integration**
-- **Publication Search** - Find papers by title, topic, or keywords
-- **Author Lookup** - Search by researcher names with fuzzy matching
-- **Statistical Analysis** - Field distributions, publication trends, and metrics
-- **Detail Retrieval** - Full publication metadata and abstracts
-
-### 🎨 **User Experience**
-- **Web Interface** - Clean, responsive chat-style interface
-- **Real-time Processing** - Live feedback during research operations
-- **Session Memory** - Maintains conversation context across queries
-- **Error Handling** - Graceful handling of edge cases and limitations
-
-## 🏗️ Architecture
-
-### **Core Components**
+### System Components
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Web Frontend  │────│  Flask Server    │────│  Agent Manager  │
-│   (HTML/JS)     │    │  (HTTP API)      │    │  (Coordinator)  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                         │
-                       ┌──────────────────┐    ┌─────────────────┐
-                       │ Memory Manager   │    │ Research Agent  │
-                       │ (Conversation)   │    │ (LangGraph)     │
-                       └──────────────────┘    └─────────────────┘
-                                                         │
-                                              ┌─────────────────┐
-                                              │ Elasticsearch   │
-                                              │ (Publications)  │
-                                              └─────────────────┘
+Web Interface → Quart Server → Agent Manager → Research Agent (ReAct) → Research Tools → Elasticsearch
+                     ↓
+              Memory Singleton (Global State Management)
 ```
 
-### **Technology Stack**
+### ReAct Workflow Process
 
-- **Backend Framework**: Flask with async support
-- **AI Orchestration**: LangGraph for complex workflow management
-- **Language Models**: Claude (Anthropic) via LiteLLM proxy
-- **Database**: Elasticsearch with Chalmers research publications
-- **Memory Management**: LangChain conversation buffers
-- **Monitoring**: LangSmith for tracing and debugging
-- **Frontend**: Vanilla HTML/CSS/JavaScript with modern UI
+1. **Query Analysis:** Parse user input and determine research intent
+2. **Tool Selection:** Choose appropriate research tools based on query type
+3. **Information Retrieval:** Execute searches using selected tools
+4. **Result Processing:** Analyze and synthesize retrieved data
+5. **Response Generation:** Formulate comprehensive answer with supporting evidence
 
-## 🚀 Getting Started
+## Installation and Setup
 
-### **Prerequisites**
+### Prerequisites
 
 - Python 3.11+
-- Access to Elasticsearch database
-- LiteLLM proxy setup with Claude models
-- Environment variables configured
+- Access to Elasticsearch instance with Chalmers research data
+- LiteLLM proxy configured with Claude model access
+- Environment variables for authentication
 
-### **Installation**
+### Installation Steps
 
-1. **Clone the repository**
+1. Clone repository and create virtual environment:
    ```bash
    git clone <repository-url>
    cd db_chat
-   ```
-
-2. **Create virtual environment**
-   ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate  # Windows: venv\Scripts\activate
    ```
 
-3. **Install dependencies**
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configurations
+3. Configure environment variables in `.env` file:
+   ```env
+   # Elasticsearch Configuration
+   ES_HOST=your-elasticsearch-host
+   ES_USER=your-username
+   ES_PASS=your-password
+   
+   # LiteLLM Configuration
+   LITELLM_API_KEY=your-api-key
+   LITELLM_BASE_URL=your-proxy-url
+   
+   # Application Settings
+   FLASK_HOST=localhost
+   FLASK_PORT=5000
+   FLASK_DEBUG=true
+   
+   # Optional: LangSmith Tracing
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=your-langsmith-key
    ```
 
-### **Environment Configuration**
+4. Run application:
+   ```bash
+   python app.py
+   ```
 
-Create a `.env` file with the following variables:
+5. Access web interface at `http://localhost:5000`
 
-```env
-# Elasticsearch Configuration
-ES_HOST=your-elasticsearch-host
-ES_USER=your-username  
-ES_PASS=your-password
+## Research Tools and Capabilities
 
-# LiteLLM Configuration
-LITELLM_API_KEY=your-litellm-api-key
-LITELLM_BASE_URL=https://your-litellm-proxy.com/v1
+The system includes specialized tools for different types of research queries:
 
-# LangSmith Tracing (Optional)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=your-langsmith-api-key
-LANGCHAIN_PROJECT=research-publications-agent
+**Publication Tools:**
+- Search publications by title, abstract, or keywords
+- Retrieve detailed publication metadata
+- Analyze publication trends and statistics
 
-# Flask Configuration
-FLASK_HOST=localhost
-FLASK_PORT=5000
-FLASK_DEBUG=true
-```
+**Person/Author Tools:**
+- Search researchers by name with fuzzy matching
+- Retrieve author profiles and publication lists
+- Analyze collaboration networks
 
-### **Running the Application**
+**Project Tools:**
+- Search research projects and grants
+- Analyze funding sources and amounts
+- Track project timelines and outcomes
 
-```bash
-python app.py
-```
+**Organization Tools:**
+- Map departments and research groups
+- Analyze institutional research output
+- Compare organizational metrics
 
-Visit `http://localhost:5000` to access the web interface.
+## API Endpoints
 
-## 💡 Usage Examples
-
-### **Basic Queries**
-```
-"Who is Per-Olof Arnäs?"
-"How many papers has Maria Andersson published?"
-"Find papers about machine learning"
-```
-
-### **Advanced Analysis**
-```
-"Show me the publication trends for artificial intelligence research at Chalmers"
-"Who are the most cited authors in sustainable technology?"
-"Compare the research output between different departments"
-```
-
-### **Follow-up Conversations**
-```
-User: "Who is John Smith?"
-Agent: [Provides author information]
-User: "Show me his most recent papers"
-Agent: [Shows recent publications with context]
-User: "What about his collaborations?"
-Agent: [Analyzes collaboration patterns]
-```
-
-## 🔧 API Endpoints
-
-### **Chat Interface**
-- `POST /chat/respond` - Process user queries
+### Chat Interface
+- `POST /chat/respond` - Process natural language queries
 - `POST /chat/clear-memory` - Clear conversation history
-- `GET /chat/session-info/<session_id>` - Get session information
+- `GET /chat/session-info/<session_id>` - Retrieve session information
 
-### **System Management**
-- `GET /status` - System status and health
-- `GET /health` - Detailed health check
-- `GET /admin/memory-stats` - Memory usage statistics
+### System Status
+- `GET /health` - System health check
+- `GET /status` - Detailed system status including database connectivity
+- `GET /admin/tools-info` - Available research tools information
 
-## ⚙️ Configuration
-
-### **Model Configuration**
-The system uses Claude models through LiteLLM:
-- **Main LLM**: `claude-sonnet-4` (for complex reasoning)
-- **Replanner**: `claude-haiku-3.5` (for quick decisions)
-
-### **Memory Settings**
-- **Type**: Buffer window memory
-- **Capacity**: Last 10 messages (5 Q&A pairs)
-- **Cleanup**: Automatic cleanup after 1 hour of inactivity
-
-### **Tool Limitations**
-- **search_publications**: Max 15 results per call
-- **search_by_author**: Max 20 results per call  
-- **get_publication_details**: High context usage, use sparingly
-- **Statistical tools**: No limits (aggregation-based)
-
-## 🧪 Testing
-
-### **Memory Inspection**
+### Example API Request
 ```bash
-python check_models.py  # Check available LiteLLM models
-curl http://localhost:5000/admin/memory-stats  # Check memory usage
+curl -X POST http://localhost:5000/chat/respond \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Find publications by Maria Andersson",
+    "session_id": "unique-session-id"
+  }'
 ```
 
-### **Streaming Test**
-```bash
-python streaming_test.py server  # Test streaming capabilities
-```
+## Configuration Details
 
-## 📁 Project Structure
+### Memory Management
+- **Session Capacity:** 10 messages (5 question-answer pairs) per session
+- **Context Window:** 2000 characters with intelligent truncation
+- **Cleanup Policy:** Automatic removal of inactive sessions after 1 hour
+- **Storage Pattern:** Global singleton ensures memory persistence across requests
+
+### Model Configuration
+- **Primary Model:** claude-sonnet-3.7 for reasoning and response generation
+- **Recursion Limit:** 50 workflow steps maximum per query
+- **Timeout:** 10 minutes per query processing
+
+### Database Limitations
+- **Scope:** Research from Chalmers University affiliations only
+- **Coverage:** Comprehensive from 2012+ for projects, 2009+ for theses
+- **Content:** Published research outputs, excludes pre-prints and unpublished work
+- **Access:** Metadata available, full-text may have restrictions
+
+## Project Structure
 
 ```
 db_chat/
-├── app.py                      # Flask application entry point
-├── check_models.py            # LiteLLM model inspection utility
-├── streaming_test.py          # Streaming capabilities test
-├── index.html                 # Web frontend interface
-├── requirements.txt           # Python dependencies
-├── .env.example              # Environment variables template
+├── app.py                          # Quart application entry point
+├── index.html                      # Web frontend
+├── requirements.txt                # Python dependencies
 ├── research_agent/
 │   ├── core/
-│   │   ├── agent_manager.py   # Main coordinator
-│   │   ├── memory_manager.py  # Conversation memory
-│   │   ├── workflow.py        # LangGraph research workflow
-│   │   ├── state.py          # State management
-│   │   ├── models.py         # Pydantic models
-│   │   └── prompt_loader.py  # Prompt management
-│   ├── tools/
-│   │   └── elasticsearch_tools.py  # Database tools
-│   ├── prompts/
-│   │   ├── batched_planning_prompt.txt
-│   │   ├── memory_aware_execution_prompt.txt
-│   │   ├── executor_prompt.txt
-│   │   └── replanner_prompt.txt
-│   └── utils/
-│       ├── config.py         # Configuration utilities
-│       └── logging.py        # Logging setup
+│   │   ├── agent_manager.py       # Query coordination and async processing
+│   │   ├── memory_singleton.py    # Global memory management
+│   │   └── workflow.py            # ReAct workflow implementation
+│   └── tools/
+│       ├── search/
+│       │   ├── publications/       # Publication search tools
+│       │   ├── persons/           # Author/researcher tools
+│       │   ├── projects/          # Research project tools
+│       │   ├── organizations/     # Department/institution tools
+│       │   └── base/              # Core Elasticsearch integration
+│       └── utils/                 # Text processing and utilities
 ```
 
-## 🛡️ Production Considerations
+## Usage Examples
 
-### **Proxy Setup**
-Ensure your proxy server supports streaming:
-```nginx
-# Nginx configuration for streaming
-proxy_buffering off;
-proxy_cache off;
-proxy_read_timeout 300s;
+**Basic Queries:**
+- "Who is [Researcher]?"
+- "Find papers about machine learning"
+- "Show me recent publications from the computer science department"
+
+**Advanced Analysis:**
+- "Compare publication output between departments"
+- "Find researchers working on sustainable technology"
+- "Analyze collaboration patterns in engineering research"
+
+**Contextual Follow-ups:**
+```
+User: "Find information about renewable energy research"
+System: [Provides overview and key researchers]
+User: "Who has published the most papers in this area?"
+System: [Analyzes publication counts with context from previous query]
+```
+## Troubleshooting
+
+**Common Issues:**
+
+*Elasticsearch Connection Failures:*
+- Verify host URL, username, and password in environment variables
+- Check network connectivity to Elasticsearch instance
+- Confirm database contains expected research data
+
+*LiteLLM/Model Access Issues:*
+- Validate API key and proxy URL configuration
+- Check model availability and rate limits
+- Review LangSmith traces for detailed error information
+
+*Memory or Performance Issues:*
+- Monitor session count via `/status` endpoint
+- Check memory cleanup frequency in logs
+- Verify query timeout settings
+
+**Debug Configuration:**
+```env
+FLASK_DEBUG=true
+LANGCHAIN_VERBOSE=true
+LANGCHAIN_TRACING_V2=true
 ```
 
-### **Security**
-- Environment variables for sensitive data
-- No hardcoded credentials
-- Session isolation
-- Input validation
+## Development Notes
 
-### **Performance**
-- Connection pooling for Elasticsearch
-- Memory cleanup for long-running sessions
-- Efficient tool selection based on query type
-- Caching for repeated statistical queries
+The system uses modern async patterns throughout. When adding new features:
+- Use `async/await` for all I/O operations
+- Follow the existing tool structure in `research_agent/tools/`
+- Implement proper error handling for database operations
+- Add appropriate logging for debugging and monitoring
 
-## 🐛 Troubleshooting
+New research tools should extend the base Elasticsearch tool and register themselves in the appropriate category (publications, persons, projects, or organizations).
 
-### **Common Issues**
+## Dependencies
 
-**LiteLLM Model Errors**
-```bash
-python check_models.py  # Verify available models
-```
-
-**Memory Issues**
-```bash
-curl http://localhost:5000/admin/memory-stats  # Check memory usage
-```
-
-**Elasticsearch Connection**
-```bash
-curl http://localhost:5000/health  # Check system health
-```
-
-**Streaming Problems**
-```bash
-python streaming_test.py  # Test proxy streaming support
-```
-
-### **Debug Mode**
-Enable detailed logging by setting `FLASK_DEBUG=true` in your environment.
-
+See `requirements.txt` for complete dependency list. Key dependencies include:
+- Quart and quart-cors for async web framework
+- LangChain and LangGraph for AI workflow orchestration
+- Elasticsearch client for database connectivity
+- LangChain-LiteLLM for model integration
