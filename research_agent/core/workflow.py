@@ -1,6 +1,7 @@
 """
-Simplified ReAct Workflow - Migrated from Plan-Execute
-Removes planning/replanning, keeps only the ReAct execution
+Cleaned ReAct Workflow - Removed plan-execute artifacts
+Removed: Complex state schema, verbose comments, plan-execute references
+Kept: ReAct execution, conversation context, research quality
 """
 
 from typing import Dict, Any, List, Optional
@@ -14,22 +15,21 @@ import uuid
 import time
 from dotenv import load_dotenv
 
-# Import tools (keep your existing tools)
+# Import tools
 from research_agent.tools import get_all_tools
 
 # =============================================================================
-# SIMPLIFIED STATE SCHEMA
+# CLEANED STATE SCHEMA
 # =============================================================================
 
 class ReActState(TypedDict):
-    """Simplified state schema for ReAct workflow."""
+    """Clean ReAct state schema."""
     input: str
     response: Optional[str]
-    session_id: Optional[str]
-    conversation_history: Optional[List[Dict[str, Any]]]
+    session_id: str
 
 # =============================================================================
-# CONTEXT HELPER (keep your existing function)
+# CONTEXT HELPER
 # =============================================================================
 
 def get_conversation_context(memory_manager, session_id: str, max_length: int = 2000) -> str:
@@ -42,20 +42,17 @@ def get_conversation_context(memory_manager, session_id: str, max_length: int = 
         if not history:
             return "No previous conversation context available."
         
-        # Build context from most recent messages, staying within max_length
+        # Build context from most recent messages
         context_parts = []
         current_length = 0
         
-        # Start from most recent and work backwards
         for msg in reversed(history):
             role = msg["role"].title()
             content = msg["content"]
             
-            # Estimate the length we'll add
             new_part = f"- {role}: {content}\n"
             new_length = current_length + len(new_part)
             
-            # If adding this would exceed max_length, truncate smartly
             if new_length > max_length:
                 remaining_space = max_length - current_length - len(f"- {role}: ") - 20
                 if remaining_space > 100:
@@ -67,22 +64,22 @@ def get_conversation_context(memory_manager, session_id: str, max_length: int = 
             current_length = new_length
         
         context = "\n".join(context_parts)
-        print(f"🔍 Context built: {len(context)} chars from {len(context_parts)} messages")
+        print(f"Context built: {len(context)} chars from {len(context_parts)} messages")
         return context
         
     except Exception as e:
-        print(f"❌ Error getting conversation context: {e}")
+        print(f"Error getting conversation context: {e}")
         return "Error retrieving conversation context."
 
 # =============================================================================
-# SIMPLIFIED MODEL CONFIGURATION
+# MODEL CONFIGURATION
 # =============================================================================
 
 def create_react_llm(session_id: str = None) -> ChatLiteLLM:
     """Create LLM for ReAct agent."""
     
     config = {
-        "model": "anthropic/claude-sonnet-3.7",  # Or your preferred model
+        "model": "anthropic/claude-sonnet-3.7",
         "temperature": 0.1,
         "max_tokens": 4000,
     }
@@ -138,7 +135,7 @@ This database covers research from Chalmers University of Technology, Sweden. Ke
 
 **CONTEXT-AWARE RESEARCH APPROACH:**
 The conversation context contains important information from our ongoing discussion. Use this context to:
-- Understand references to people, publications, or topics mentioned earlier (like "the co-author", "their work", "that researcher")
+- Understand references to people, publications, or topics mentioned earlier
 - Avoid asking for clarification when context already provides answers
 - Build upon previous research findings rather than starting from scratch
 - Connect current research to information already discovered
@@ -185,7 +182,7 @@ Think step-by-step and use a systematic approach:
 Now execute your research using the available tools to provide a comprehensive, well-structured response."""
 
 # =============================================================================
-# SIMPLIFIED WORKFLOW CREATION
+# CLEANED WORKFLOW CREATION
 # =============================================================================
 
 def create_react_workflow(
@@ -194,9 +191,9 @@ def create_react_workflow(
     session_id: str = None,
     memory_manager=None
 ) -> StateGraph:
-    """Create simplified ReAct workflow."""
+    """Create clean ReAct workflow."""
     
-    # Get tools (keep your existing tool setup)
+    # Get tools
     if es_client:
         tools = get_all_tools(es_client=es_client, index_name=index_name)
     else:
@@ -207,29 +204,24 @@ def create_react_workflow(
         try:
             from .memory_singleton import get_global_memory_manager
             memory_manager = get_global_memory_manager()
-            print("✅ Using global memory manager singleton")
+            print("Using global memory manager singleton")
         except ImportError:
-            from .memory_manager import MemoryManager
-            memory_manager = MemoryManager()
-            print("⚠️ Warning: Using fallback MemoryManager")
+            print("Warning: Could not import global memory manager")
+            memory_manager = None
     
     # Create ReAct LLM
     react_llm = create_react_llm(session_id)
     
-    # =============================================================================
-    # SINGLE REACT NODE
-    # =============================================================================
-    
     def react_step(state: ReActState):
-        """Single ReAct step - does all the reasoning and acting."""
+        """ReAct step - reasoning and acting."""
         try:
             query = state["input"]
-            session_id = state.get("session_id", f"fallback_{int(time.time())}")
+            session_id = state["session_id"]
             
             # Get conversation context
             conversation_context = get_conversation_context(memory_manager, session_id, max_length=10000)
             
-            print(f"🔍 REACT with context length: {len(conversation_context)} chars")
+            print(f"ReAct executing with context length: {len(conversation_context)} chars")
             
             # Create prompt with context
             react_prompt = REACT_PROMPT_TEMPLATE.format(
@@ -237,7 +229,7 @@ def create_react_workflow(
                 conversation_context=conversation_context
             )
             
-            # Create ReAct agent (this handles the reasoning/acting loop internally)
+            # Create ReAct agent
             agent_executor = create_react_agent(react_llm, tools, prompt=react_prompt)
             
             config = {
@@ -259,8 +251,7 @@ def create_react_workflow(
                 
                 response_content = result["messages"][-1].content
                 
-                print(f"✅ REACT completed with response length: {len(response_content)} chars")
-                print(f"🔍 Response preview: {response_content[:200]}...")
+                print(f"ReAct completed with response length: {len(response_content)} chars")
                 
                 return {
                     "response": response_content,
@@ -269,40 +260,33 @@ def create_react_workflow(
                 
             except Exception as exec_error:
                 error_response = f"Error during research: {str(exec_error)}"
-                print(f"❌ REACT execution error: {exec_error}")
+                print(f"ReAct execution error: {exec_error}")
                 return {
                     "response": error_response,
                     "session_id": session_id
                 }
         
         except Exception as e:
-            print(f"❌ ReAct error: {e}")
+            print(f"ReAct error: {e}")
             return {
                 "response": f"Error processing request: {str(e)}",
-                "session_id": state.get("session_id", f"fallback_{int(time.time())}")
+                "session_id": state["session_id"]
             }
     
-    # =============================================================================
-    # SIMPLIFIED WORKFLOW CONSTRUCTION
-    # =============================================================================
-    
+    # Build workflow
     workflow = StateGraph(ReActState)
-    
-    # Single node workflow
     workflow.add_node("react", react_step)
-    
-    # Simple linear flow
     workflow.add_edge(START, "react")
     workflow.add_edge("react", END)
     
     return workflow
 
 # =============================================================================
-# SIMPLIFIED RESEARCH AGENT CLASS
+# CLEANED RESEARCH AGENT CLASS
 # =============================================================================
 
 class ResearchAgent:
-    """Simplified ReAct Research Agent (migrated from plan-execute)."""
+    """Clean ReAct Research Agent."""
     
     def __init__(self, es_client=None, index_name: str = "research-publications-static", 
                  recursion_limit: int = 50, memory_manager=None): 
@@ -329,8 +313,7 @@ class ResearchAgent:
         initial_state = {
             "input": query,
             "response": None,
-            "session_id": session_id,
-            "conversation_history": conversation_history or []
+            "session_id": session_id
         }
         
         config = {
@@ -352,20 +335,19 @@ class ResearchAgent:
         
         try:
             async for event in self.app.astream(initial_state, config=config):
-                print(f"🔍 Streaming event: {list(event.keys())}")
+                print(f"Streaming event: {list(event.keys())}")
                 if 'react' in event and 'response' in event['react']:
-                    print(f"✅ Found response in event: {event['react']['response'][:100]}...")
+                    print(f"Found response in event: {event['react']['response'][:100]}...")
                 yield event
         except Exception as e:
-            print(f"❌ Streaming error: {e}")
+            print(f"Streaming error: {e}")
             yield {"error": {"error": str(e)}}
 
-    # Backward compatibility method
     async def stream_query_without_recompile(self, query: str, conversation_history: Optional[List[Dict]] = None, frontend_session_id: str = None):
-        """Backward compatibility method - delegates to stream_query."""
+        """Backward compatibility method."""
         async for event in self.stream_query(query, conversation_history, frontend_session_id):
             yield event
 
 
 if __name__ == "__main__":
-    print("Testing simplified ReAct workflow...")
+    print("Testing cleaned ReAct workflow...")

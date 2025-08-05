@@ -1,8 +1,8 @@
 """
-Balanced Simplified Agent Manager - Removes bloat but keeps safety features
-Kept: Timeout protection, thread isolation, graceful cleanup
-Removed: Verbose logging, complex status, extensive error handling
-FIXED: Memory manager persistence issue
+Cleaned Agent Manager - Removes bloat but keeps current execution pattern
+Kept: Threading approach, timeout protection, graceful cleanup
+Removed: Plan-execute artifacts, verbose logging, complex status
+Fixed: Memory manager persistence, simplified state, cleaner error handling
 """
 
 import os
@@ -25,7 +25,7 @@ except ImportError:
 
 
 class AgentManager:
-    """Simplified agent manager - removes bloat but keeps safety features."""
+    """Cleaned agent manager - removes bloat but keeps current execution pattern."""
     
     def __init__(self, index_name: str = "research-publications-static"):
         self.index_name = index_name
@@ -33,8 +33,8 @@ class AgentManager:
         
         self.es_client = self._init_elasticsearch()
         
-        # ✅ FIXED: Create ONE memory manager instance that persists
-        self.memory_manager = self.memory_manager = get_global_memory_manager()
+        # Use the working memory system
+        self.memory_manager = get_global_memory_manager()
         
         print("AgentManager initialized with global memory")
     
@@ -59,7 +59,7 @@ class AgentManager:
         return self.es_client is not None and self.es_client.ping()
     
     def process_query(self, query: str, session_id: str = None) -> Dict[str, Any]:
-        """Process query with safety features preserved."""
+        """Process query - all queries go through ReAct workflow."""
         
         session_id = session_id or f'session_{int(time.time())}_{str(uuid.uuid4())[:8]}'
         self.query_stats["total"] += 1
@@ -67,20 +67,6 @@ class AgentManager:
         
         try:
             print(f"Processing query for session: {session_id}")
-            
-            # Handle simple queries
-            simple_response = self._handle_simple_query(query)
-            if simple_response:
-                # ✅ FIXED: Use the persistent memory manager
-                self.memory_manager.save_conversation(session_id, query, simple_response)
-                self.query_stats["success"] += 1
-                return {
-                    "success": True,
-                    "response": simple_response,
-                    "session_id": session_id,
-                    "execution_time": time.time() - start_time,
-                    "response_type": "simple"
-                }
             
             # Check system readiness
             if not self.is_ready():
@@ -91,13 +77,11 @@ class AgentManager:
                     "session_id": session_id
                 }
             
-            # Execute research workflow with safety features
-            # ✅ FIXED: Use the persistent memory manager
+            # Execute research workflow for all queries
             conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
             response_content = self._execute_research_safely(query, conversation_history, session_id)
             
             if response_content:
-                # ✅ FIXED: Use the persistent memory manager
                 self.memory_manager.save_conversation(session_id, query, response_content)
                 self.query_stats["success"] += 1
                 print(f"Research completed in {time.time() - start_time:.1f}s")
@@ -124,39 +108,23 @@ class AgentManager:
                 "session_id": session_id
             }
     
-    def _handle_simple_query(self, query: str) -> Optional[str]:
-        """Handle simple queries."""
-        query_lower = query.lower().strip()
-        
-        if query_lower in ["hello", "hi", "hey"]:
-            return "Hello! I'm your research assistant. What would you like to research?"
-        
-        if "help" in query_lower or "what can you do" in query_lower:
-            return """I can help you research authors and academic fields:
-• Author information and publication analysis
-• Research trend identification  
-• Collaboration network mapping
-• Field-specific searches
-
-Just ask me about any researcher or academic field!"""
-        
         return None
 
     def _execute_research_safely(self, query: str, conversation_history, session_id: str) -> str:
-        """Execute research workflow with timeout and thread isolation."""
+        """Execute research workflow - keep current threading approach but clean it up."""
         
         def run_workflow():
-            """Run workflow in isolated thread with proper cleanup."""
+            """Run workflow in isolated thread - simplified cleanup."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             try:
-                # ✅ FIXED: Create and compile agent with the persistent memory manager
+                # Create agent with working memory manager
                 agent = ResearchAgent(
                     es_client=self.es_client,
                     index_name=self.index_name,
                     recursion_limit=50,
-                    memory_manager=self.memory_manager  # ✅ Pass the persistent memory manager
+                    memory_manager=self.memory_manager
                 )
                 agent._compile_agent(session_id)
                 
@@ -174,19 +142,18 @@ Just ask me about any researcher or academic field!"""
                 return f"Research error: {str(e)}"
             
             finally:
-                # Graceful cleanup
+                # Simple cleanup
                 try:
-                    loop.run_until_complete(asyncio.sleep(0.1))  # Let streams finish
                     if not loop.is_closed():
                         loop.close()
                 except:
                     pass
         
-        # Run in thread pool for isolation
+        # Run in thread pool - keep current approach
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_workflow)
-                return future.result(timeout=650)  # Slightly longer than internal timeout
+                return future.result(timeout=650)
                 
         except concurrent.futures.TimeoutError:
             return "Research workflow timed out."
@@ -194,7 +161,7 @@ Just ask me about any researcher or academic field!"""
             return f"Research workflow error: {str(e)}"
 
     async def _collect_stream_result(self, agent: ResearchAgent, query: str, conversation_history, session_id: str) -> str:
-        """Collect the final result from streaming workflow."""
+        """Collect result from streaming workflow - fixed for ReAct."""
         response_content = ""
         
         async for event_data in agent.stream_query_without_recompile(
@@ -202,8 +169,8 @@ Just ask me about any researcher or academic field!"""
         ):
             if isinstance(event_data, dict):
                 for node_name, node_data in event_data.items():
-                    # ✅ CHANGE THIS LINE:
-                    if node_name in ["__end__", "react"] and isinstance(node_data, dict):  # Changed "replan" to "react"
+                    # Fixed: Look for "react" not "replan"
+                    if node_name in ["__end__", "react"] and isinstance(node_data, dict):
                         if "response" in node_data:
                             response_content = node_data["response"]
                             break
@@ -233,7 +200,6 @@ Just ask me about any researcher or academic field!"""
     def clear_memory(self, session_id: str) -> Dict[str, Any]:
         """Clear memory for session."""
         try:
-            # ✅ FIXED: Use the persistent memory manager
             self.memory_manager.clear_session_memory(session_id)
             return {"success": True, "message": f"Cleared memory for session: {session_id}"}
         except Exception as e:
@@ -242,7 +208,6 @@ Just ask me about any researcher or academic field!"""
     def get_session_info(self, session_id: str) -> Dict[str, Any]:
         """Get basic session information."""
         try:
-            # ✅ FIXED: Use the persistent memory manager
             history = self.memory_manager.get_conversation_history_for_state(session_id)
             return {
                 "success": True,
@@ -272,7 +237,6 @@ Just ask me about any researcher or academic field!"""
             return {"success": False, "error": str(e), "total_tools": 0, "tools": []}
 
 
-# Factory function
 def create_agent_manager(index_name: str = "research-publications-static") -> AgentManager:
     """Create agent manager."""
     return AgentManager(index_name=index_name)
