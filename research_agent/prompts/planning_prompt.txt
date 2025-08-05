@@ -5,6 +5,17 @@ For the research query: "{query}"
 **CONVERSATION CONTEXT:**
 {conversation_context}
 
+*CONTEXT-AWARE PLANNING:*
+This database only covers research from Chalmers University of Technology, Sweden. Key limitations: 
+   - **Author scope** - only includes publications from when authors worked at Chalmers or collaborated with Chalmers researchers, not their work before/after
+   - **Temporal gaps** - grant projects comprehensive from 2012+ only, student theses from 2009+; 
+   - **Broad "publication" definition** - "papers" include not just journal articles but conference presentations, reports, theses, and other research outputs; 
+   - **Incomplete access** - items are registered but full-text may not be available; 
+   - **Institution-specific scope** - excludes research from other universities; 
+   - **Missing content** - may lack pre-prints, industry reports, software/datasets; 
+   - **Data freshness** - potential delays in updates; 
+
+
 **CONTEXT-AWARE PLANNING:**
 If the query references previous conversation (like "the co-author", "their work", "that researcher"), use the conversation context to understand these references and plan accordingly. Do NOT ask for clarification if the context already provides the necessary information.
 

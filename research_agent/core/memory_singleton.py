@@ -1,17 +1,45 @@
-
 """
-Global Memory Manager Singleton - Ensures memory persists across Flask requests
+Global Memory Manager Singleton - Fixed Deprecation Warning
+Ensures memory persists across Flask requests without deprecated LangChain components.
 """
 
 import time
 from typing import Dict, List, Any, Optional
-from langchain_core.messages import HumanMessage, AIMessage
+from collections import deque
+from datetime import datetime
 
-# Trust LangChain memory - use the best available
-try:
-    from langchain.memory import ConversationBufferWindowMemory
-except ImportError:
-    from langchain_community.memory import ConversationBufferWindowMemory
+class ConversationMemory:
+    """Simple conversation memory replacement for deprecated ConversationBufferWindowMemory."""
+    
+    def __init__(self, k: int = 10):
+        self.k = k  # Keep last k messages
+        self.messages = deque(maxlen=k)
+        self.memory_key = "chat_history"
+    
+    def save_context(self, inputs: Dict[str, str], outputs: Dict[str, str]):
+        """Save input-output pair to memory."""
+        # Add human message
+        self.messages.append({
+            "type": "human",
+            "content": inputs.get("input", ""),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Add AI message
+        self.messages.append({
+            "type": "ai", 
+            "content": outputs.get("output", ""),
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    def clear(self):
+        """Clear all messages."""
+        self.messages.clear()
+    
+    @property
+    def chat_memory(self):
+        """Return self for compatibility."""
+        return self
 
 
 class GlobalMemoryManager:
@@ -44,12 +72,8 @@ class GlobalMemoryManager:
             self._smart_cleanup()
         
         if session_id not in self.session_memories:
-            # Create LangChain memory - trust it to work
-            memory = ConversationBufferWindowMemory(
-                k=10,  # Keep last 10 messages (5 Q&A pairs)
-                return_messages=True,
-                memory_key="chat_history"
-            )
+            # Create simple memory - no deprecated components
+            memory = ConversationMemory(k=10)  # Keep last 10 messages (5 Q&A pairs)
             
             self.session_memories[session_id] = {
                 "memory": memory,
@@ -76,10 +100,10 @@ class GlobalMemoryManager:
         
         conversation_history = []
         for msg in messages:
-            if isinstance(msg, HumanMessage):
-                conversation_history.append({"role": "user", "content": msg.content})
-            elif isinstance(msg, AIMessage):
-                conversation_history.append({"role": "assistant", "content": msg.content})
+            if msg["type"] == "human":
+                conversation_history.append({"role": "user", "content": msg["content"]})
+            elif msg["type"] == "ai":
+                conversation_history.append({"role": "assistant", "content": msg["content"]})
         
         return conversation_history
     

@@ -11,6 +11,9 @@ Original plan: {original_plan}
 COMPLETE RESEARCH RESULTS:
 {research_summary}
 
+**DATABASE SCOPE AWARENESS:**
+This database covers research from Chalmers University of Technology, Sweden. Key points: authors' work is only included during their Chalmers affiliation/collaboration period; "publications" include various research outputs beyond journal articles; grant projects are comprehensive from 2012+ onwards.
+
 **CONTEXT-AWARE DECISION MAKING:**
 Consider the full conversation context when deciding whether to continue research or provide a final response. Ensure that:
 - References to previous conversation topics are properly addressed
@@ -30,6 +33,14 @@ GUIDELINES FOR RESPONSE:
 - The research objective has been met with rich, detailed findings
 - All references to previous conversation have been properly addressed
 
+**Response Quality Standards:**
+- Lead with direct answer to user's specific question
+- Include relevant statistics, counts, and examples from COMPLETE research
+- Use clear structure with headers and formatting
+- Address all aspects of the original query with full context
+- Connect findings to previous conversation when appropriate
+- **Mention database scope briefly only when directly relevant to understanding the results**
+
 Markdown style guide for response:
 - Use clear headers (#, ##, ###) to structure information
 - Bold important terms (**text**) for emphasis
@@ -47,13 +58,5 @@ GUIDELINES FOR PLAN:
 - Current FULL results are incomplete for comprehensive answer
 - Missing critical information despite having detailed research content
 - References to conversation context require additional research
-
-RESPONSE QUALITY (when providing final response):
-- Lead with direct answer to user's specific question
-- Include relevant statistics, counts, and examples from COMPLETE research
-- Use clear structure with headers and formatting
-- Address all aspects of the original query with full context
-- Connect findings to previous conversation when appropriate
-- Mention scope and limitations when relevant
 
 Make your decision based on the COMPLETE research content available and the full conversation context:
