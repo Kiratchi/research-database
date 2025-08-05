@@ -1,33 +1,29 @@
 """
-Simplified Flask Application - Streamlined error handling and health checks
-Removed: Complex health checks, extensive status reporting, verbose error handling
-Kept: Core functionality, basic error handling, simple status endpoint
+Async Flask Application - Modern async/await pattern
+Removes: Complex threading, event loop management, double timeouts
+Adds: Direct async execution, cleaner error handling, better performance
 """
 
 import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import asyncio
+from quart import Quart, request, jsonify
+from quart_cors import cors
 
 from research_agent.core.agent_manager import AgentManager
 
 
 def create_app():
-    """Create and configure Flask app."""
-    app = Flask(__name__)
-    
-    # Disable Flask sessions
-    app.config['SECRET_KEY'] = None
-    app.config['SESSION_COOKIE_NAME'] = None
-    app.config['PERMANENT_SESSION_LIFETIME'] = 0
+    """Create and configure async Flask app using Quart."""
+    app = Quart(__name__)
     
     # Enable CORS
-    CORS(app)
+    app = cors(app)
     
     # Initialize the agent manager
     agent_manager = AgentManager()
     
     @app.route('/')
-    def index():
+    async def index():
         """Serve the web interface."""
         try:
             if os.path.exists('index.html'):
@@ -39,12 +35,12 @@ def create_app():
             return f'<h1>Error</h1><p>{str(e)}</p>'
 
     @app.route('/status')
-    def status():
+    async def status():
         """Get basic system status."""
         return jsonify(agent_manager.get_status())
 
     @app.route('/health')
-    def health():
+    async def health():
         """Simple health check."""
         health_info = agent_manager.health_check()
         
@@ -54,10 +50,10 @@ def create_app():
             return jsonify(health_info), 503
 
     @app.route('/chat/respond', methods=['POST'])
-    def chat_respond():
-        """Handle chat requests."""
+    async def chat_respond():
+        """Handle chat requests - now fully async."""
         try:
-            data = request.get_json()
+            data = await request.get_json()
             
             if not data or 'message' not in data:
                 return jsonify({
@@ -74,8 +70,8 @@ def create_app():
                     "error": "Empty message"
                 }), 400
 
-            # Process query
-            result = agent_manager.process_query(query, session_id)
+            # Direct async processing - properly calling the async method!
+            result = await agent_manager.process_query_async(query, session_id)
             
             if result['success']:
                 return jsonify({
@@ -83,7 +79,7 @@ def create_app():
                     "response_content": result['response'],
                     "session_id": result['session_id'],
                     "execution_time": result.get('execution_time', 0),
-                    "response_type": result.get('response_type', 'unknown')
+                    "response_type": result.get('response_type', 'research')
                 })
             else:
                 return jsonify({
@@ -99,10 +95,10 @@ def create_app():
             }), 500
 
     @app.route('/chat/clear-memory', methods=['POST'])
-    def clear_memory():
+    async def clear_memory():
         """Clear conversation memory for a session."""
         try:
-            data = request.get_json() or {}
+            data = await request.get_json() or {}
             session_id = data.get('session_id')
             
             if not session_id:
@@ -125,7 +121,7 @@ def create_app():
             }), 500
 
     @app.route('/chat/session-info/<session_id>')
-    def get_session_info(session_id):
+    async def get_session_info(session_id):
         """Get basic session information."""
         try:
             result = agent_manager.get_session_info(session_id)
@@ -142,7 +138,7 @@ def create_app():
             }), 500
 
     @app.route('/admin/tools-info')
-    def tools_info():
+    async def tools_info():
         """Get information about available tools."""
         try:
             info = agent_manager.get_tools_info()
@@ -154,14 +150,14 @@ def create_app():
 
     # Simple error handlers
     @app.errorhandler(404)
-    def not_found(error):
+    async def not_found(error):
         return jsonify({
             "success": False,
             "error": "Endpoint not found"
         }), 404
 
     @app.errorhandler(500)
-    def internal_error(error):
+    async def internal_error(error):
         return jsonify({
             "success": False,
             "error": "Internal server error"
@@ -181,7 +177,7 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"⚠️ Warning loading .env: {e}")
 
-    # Create and run app
+    # Create and run async app
     try:
         app = create_app()
         
@@ -190,9 +186,10 @@ if __name__ == '__main__':
         port = int(os.getenv('FLASK_PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
         
-        print("Research Agent Server starting...")
+        print("Research Agent Server starting (Async)...")
         print(f"URL: http://{host}:{port}")
         
+        # Use Quart's async run method
         app.run(host=host, port=port, debug=debug, use_reloader=False)
         
     except KeyboardInterrupt:

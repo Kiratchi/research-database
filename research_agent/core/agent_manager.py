@@ -1,15 +1,15 @@
 """
-Cleaned Agent Manager - Removes bloat but keeps current execution pattern
-Kept: Threading approach, timeout protection, graceful cleanup
-Removed: Plan-execute artifacts, verbose logging, complex status
-Fixed: Memory manager persistence, simplified state, cleaner error handling
+Async Agent Manager - Removes threading complexity
+Removed: ThreadPoolExecutor, event loop management, complex timeout handling
+Added: Direct async execution, single timeout, cleaner error handling
+
+This replaces your current agent_manager.py file.
 """
 
 import os
 import asyncio
 import time
 import uuid
-import concurrent.futures
 from typing import Dict, Any, Optional
 from elasticsearch import Elasticsearch
 
@@ -25,7 +25,7 @@ except ImportError:
 
 
 class AgentManager:
-    """Cleaned agent manager - removes bloat but keeps current execution pattern."""
+    """Async agent manager - direct async execution, no threading complexity."""
     
     def __init__(self, index_name: str = "research-publications-static"):
         self.index_name = index_name
@@ -36,7 +36,7 @@ class AgentManager:
         # Use the working memory system
         self.memory_manager = get_global_memory_manager()
         
-        print("AgentManager initialized with global memory")
+        print("AgentManager initialized with global memory (async)")
     
     def _init_elasticsearch(self) -> Optional[Elasticsearch]:
         """Initialize Elasticsearch client."""
@@ -58,15 +58,15 @@ class AgentManager:
         """Check if system is ready."""
         return self.es_client is not None and self.es_client.ping()
     
-    def process_query(self, query: str, session_id: str = None) -> Dict[str, Any]:
-        """Process query - all queries go through ReAct workflow."""
+    async def process_query_async(self, query: str, session_id: str = None) -> Dict[str, Any]:
+        """Process query asynchronously - no threading complexity."""
         
         session_id = session_id or f'session_{int(time.time())}_{str(uuid.uuid4())[:8]}'
         self.query_stats["total"] += 1
         start_time = time.time()
         
         try:
-            print(f"Processing query for session: {session_id}")
+            print(f"Processing async query for session: {session_id}")
             
             # Check system readiness
             if not self.is_ready():
@@ -77,14 +77,19 @@ class AgentManager:
                     "session_id": session_id
                 }
             
-            # Execute research workflow for all queries
+            # Get conversation history
             conversation_history = self.memory_manager.get_conversation_history_for_state(session_id)
-            response_content = self._execute_research_safely(query, conversation_history, session_id)
+            
+            # Direct async execution with single timeout
+            response_content = await asyncio.wait_for(
+                self._execute_research_async(query, conversation_history, session_id),
+                timeout=600  # Single 10-minute timeout
+            )
             
             if response_content:
                 self.memory_manager.save_conversation(session_id, query, response_content)
                 self.query_stats["success"] += 1
-                print(f"Research completed in {time.time() - start_time:.1f}s")
+                print(f"Async research completed in {time.time() - start_time:.1f}s")
                 return {
                     "success": True,
                     "response": response_content,
@@ -100,82 +105,77 @@ class AgentManager:
                     "session_id": session_id
                 }
             
+        except asyncio.TimeoutError:
+            self.query_stats["failed"] += 1
+            print(f"Query timed out after 10 minutes for session: {session_id}")
+            return {
+                "success": False,
+                "error": "Research workflow timed out after 10 minutes",
+                "session_id": session_id
+            }
         except Exception as e:
             self.query_stats["failed"] += 1
+            print(f"Async query error: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "session_id": session_id
             }
-    
-        return None
 
-    def _execute_research_safely(self, query: str, conversation_history, session_id: str) -> str:
-        """Execute research workflow - keep current threading approach but clean it up."""
+    async def _execute_research_async(self, query: str, conversation_history, session_id: str) -> str:
+        """Direct async research execution - no threads, no event loop management."""
         
-        def run_workflow():
-            """Run workflow in isolated thread - simplified cleanup."""
+        try:
+            # Create agent with working memory manager
+            agent = ResearchAgent(
+                es_client=self.es_client,
+                index_name=self.index_name,
+                recursion_limit=50,
+                memory_manager=self.memory_manager
+            )
+            agent._compile_agent(session_id)
+            
+            # Direct async streaming - no complex threading
+            response_content = ""
+            async for event_data in agent.stream_query(query, conversation_history, session_id):
+                if isinstance(event_data, dict):
+                    for node_name, node_data in event_data.items():
+                        # Look for ReAct response
+                        if node_name in ["__end__", "react"] and isinstance(node_data, dict):
+                            if "response" in node_data:
+                                response_content = node_data["response"]
+                                break
+                    
+                    # Break out of outer loop if we found response
+                    if response_content:
+                        break
+            
+            return response_content or "Research completed successfully."
+            
+        except Exception as e:
+            print(f"Research execution error: {e}")
+            return f"Research error: {str(e)}"
+    
+    # Backward compatibility - sync version using asyncio.run()
+    def process_query(self, query: str, session_id: str = None) -> Dict[str, Any]:
+        """Sync wrapper for backward compatibility."""
+        try:
+            # Simple approach - create new event loop
+            import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
             try:
-                # Create agent with working memory manager
-                agent = ResearchAgent(
-                    es_client=self.es_client,
-                    index_name=self.index_name,
-                    recursion_limit=50,
-                    memory_manager=self.memory_manager
-                )
-                agent._compile_agent(session_id)
-                
-                # Run with timeout
-                return loop.run_until_complete(
-                    asyncio.wait_for(
-                        self._collect_stream_result(agent, query, conversation_history, session_id),
-                        timeout=600  # 10 minute timeout
-                    )
-                )
-                
-            except asyncio.TimeoutError:
-                return "Research workflow timed out after 10 minutes."
-            except Exception as e:
-                return f"Research error: {str(e)}"
-            
+                return loop.run_until_complete(self.process_query_async(query, session_id))
             finally:
-                # Simple cleanup
-                try:
-                    if not loop.is_closed():
-                        loop.close()
-                except:
-                    pass
-        
-        # Run in thread pool - keep current approach
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(run_workflow)
-                return future.result(timeout=650)
+                loop.close()
                 
-        except concurrent.futures.TimeoutError:
-            return "Research workflow timed out."
         except Exception as e:
-            return f"Research workflow error: {str(e)}"
-
-    async def _collect_stream_result(self, agent: ResearchAgent, query: str, conversation_history, session_id: str) -> str:
-        """Collect result from streaming workflow - fixed for ReAct."""
-        response_content = ""
-        
-        async for event_data in agent.stream_query_without_recompile(
-            query, conversation_history, session_id
-        ):
-            if isinstance(event_data, dict):
-                for node_name, node_data in event_data.items():
-                    # Fixed: Look for "react" not "replan"
-                    if node_name in ["__end__", "react"] and isinstance(node_data, dict):
-                        if "response" in node_data:
-                            response_content = node_data["response"]
-                            break
-        
-        return response_content or "Research completed successfully."
+            print(f"Sync wrapper error: {e}")
+            return {
+                "success": False,
+                "error": f"Sync wrapper error: {str(e)}",
+                "session_id": session_id or f'session_{int(time.time())}'
+            }
     
     def get_status(self) -> Dict[str, Any]:
         """Get basic system status."""

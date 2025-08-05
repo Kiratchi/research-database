@@ -701,9 +701,8 @@
                 <div class="message-avatar">
                     <i class="fas fa-robot"></i>
                 </div>
-                <div class="message-content">
-                    <p>Hello! I can help you search publications, find papers by author, get statistics, and compare research output.</p>
-                    <p><strong>Try:</strong> "How many papers has [author] published?" or "Find articles about machine learning"</p>
+                <div class="message-content" id="welcomeMessage">
+                    <!-- Dynamic welcome message will be inserted here -->
                 </div>
             </div>
 
@@ -723,7 +722,7 @@
             <div class="error-message" id="errorMessage"></div>
             <div class="processing-message" id="processingMessage">
                 <i class="fas fa-cog processing-icon"></i>
-                <span id="processingText">Processing...</span>
+                <span id="processingText">Processing with ReAct...</span>
             </div>
             
             <div class="input-group">
@@ -771,9 +770,35 @@
                 this.configureMarkdown();
                 
                 this.initializeEventListeners();
+                this.setRandomWelcomeMessage();
                 this.checkSystemStatus();
                 
                 console.log('🆔 Local session:', this.sessionId);
+            }
+            
+            setRandomWelcomeMessage() {
+                const exampleQuestions = [
+                    "What research is being done on <em>specific topic</em> at Chalmers?",
+                    "Who are the leading researchers in <em>field</em>?", 
+                    "What are the most recent publications from <em>department</em>?",
+                    "Which researchers collaborate most internationally?",
+                    "Find potential thesis supervisors for <em>specific research topic</em>",
+                    "Show me EU-funded projects in <em>department</em>",
+                    "What current research is similar to <em>research area</em>?"
+                ];
+                
+                // Shuffle the array and pick the first 2 to ensure no duplicates
+                const shuffled = [...exampleQuestions].sort(() => Math.random() - 0.5);
+                const selectedExamples = shuffled.slice(0, 2);
+                
+                const welcomeContent = `
+                    <p>Hello! I can help you search publications, find papers by author, get statistics, and compare research output from Chalmers University.</p>
+                    <p><strong>Try asking:</strong></p>
+                    <p>• ${selectedExamples[0]}</p>
+                    <p>• ${selectedExamples[1]}</p>
+                `;
+                
+                document.getElementById('welcomeMessage').innerHTML = welcomeContent;
             }
             
             configureMarkdown() {
@@ -836,13 +861,13 @@
                 this.updateSendButton(false);
                 this.hideError();
                 
-                await this.sendNonStreamingMessage(message);
+                await this.sendAsyncMessage(message);
                 
                 this.isProcessing = false;
                 this.updateSendButton(true);
             }
             
-            async sendNonStreamingMessage(message) {
+            async sendAsyncMessage(message) {
                 this.showProcessing('🔍 Processing your query...');
 
                 try {
@@ -856,25 +881,27 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText}`);
                     }
 
                     const data = await response.json();
 
                     this.hideProcessing();
 
-                    if (data.response_content && data.response_content.trim()) {
+                    if (data.success && data.response_content && data.response_content.trim()) {
                         this.addMessage('assistant', data.response_content);
-                        // Memory is now managed automatically by the backend
-                        console.log('✅ Response received, memory managed automatically');
+                        console.log('✅ Async response received, execution time:', data.execution_time);
                     } else {
-                        this.addMessage('assistant', 'I didn\'t generate a response. Please try again.');
+                        this.addMessage('assistant', data.error || 'No response generated. Please try again.');
+                        this.showError(data.error || 'Unknown error occurred');
                     }
 
                 } catch (error) {
                     this.hideProcessing();
+                    console.error('Async request failed:', error);
                     this.showError('Error: ' + error.message);
-                    this.addMessage('assistant', 'Something went wrong while processing your request.');
+                    this.addMessage('assistant', 'Something went wrong while processing your request. Please try again.');
                 }
             }
             
@@ -942,7 +969,7 @@
             showError(message) {
                 this.errorMessage.textContent = message;
                 this.errorMessage.style.display = 'block';
-                setTimeout(() => this.hideError(), 5000);
+                setTimeout(() => this.hideError(), 8000);
             }
             
             hideError() {
@@ -1014,8 +1041,10 @@
                 alert(`System Status:
 • Elasticsearch: ${status.elasticsearch_connected ? '✅ Connected' : '❌ Disconnected'}
 • System Ready: ${status.system_ready ? '✅ Yes' : '❌ No'}
-• Queries Processed: ${status.query_stats.total_queries || 0}
-• Success Rate: ${status.query_stats.successful_queries || 0}/${status.query_stats.total_queries || 0}`);
+• Memory Sessions: ${status.memory_sessions || 0}
+• Queries Total: ${status.query_stats.total || 0}
+• Success: ${status.query_stats.success || 0}
+• Failed: ${status.query_stats.failed || 0}`);
             } catch (error) {
                 alert('Failed to fetch system status');
             }
