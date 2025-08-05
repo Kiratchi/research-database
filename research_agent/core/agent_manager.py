@@ -202,7 +202,8 @@ Just ask me about any researcher or academic field!"""
         ):
             if isinstance(event_data, dict):
                 for node_name, node_data in event_data.items():
-                    if node_name in ["__end__", "replan"] and isinstance(node_data, dict):
+                    # ✅ CHANGE THIS LINE:
+                    if node_name in ["__end__", "react"] and isinstance(node_data, dict):  # Changed "replan" to "react"
                         if "response" in node_data:
                             response_content = node_data["response"]
                             break
