@@ -76,6 +76,11 @@
             background: #2ed573;
         }
 
+        .status-dot.streaming {
+            background: #ffa502;
+            animation: pulse 1.5s infinite;
+        }
+
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -390,6 +395,225 @@
             color: rgba(255, 255, 255, 0.95);
         }
 
+        /* REASONING COMPONENTS STYLES */
+        .reasoning-toggle {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 8px 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .reasoning-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .reasoning-toggle.active {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        .reasoning-toggle.streaming {
+            background: linear-gradient(135deg, #ffa502 0%, #ff6348 100%);
+        }
+
+        .reasoning-toggle.streaming .toggle-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        .toggle-arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .reasoning-toggle.active .toggle-arrow {
+            transform: rotate(180deg);
+        }
+
+        .reasoning-container {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            margin: 12px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .reasoning-container.visible {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .reasoning-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
+        }
+
+        .reasoning-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .summary-text {
+            font-weight: 500;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .reasoning-stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.2);
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+
+        .reasoning-steps {
+            padding: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .reasoning-step {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            transition: background-color 0.2s ease;
+            opacity: 0.3;
+            animation: stepAppear 0.5s ease-out forwards;
+        }
+
+        .reasoning-step:hover {
+            background-color: #f1f5f9;
+        }
+
+        .reasoning-step:last-child {
+            border-bottom: none;
+        }
+
+        .reasoning-step.streaming {
+            border-left: 3px solid #ffa502;
+            background-color: #fffef7;
+        }
+
+        .step-icon {
+            font-size: 16px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            flex-shrink: 0;
+            font-size: 12px;
+        }
+
+        .step-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 2px;
+            font-size: 13px;
+        }
+
+        .step-description {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .step-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .step-details {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #475569;
+            border-left: 3px solid #cbd5e1;
+            display: none;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .step-details.visible {
+            display: block;
+        }
+
+        .reasoning-footer {
+            padding: 12px 16px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .details-toggle, .feedback-btn {
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .details-toggle:hover, .feedback-btn:hover {
+            background: #cbd5e1;
+        }
+
+        .feedback-btn {
+            background: none;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+
+        .feedback-btn:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
         .typing-indicator {
             display: none;
             align-items: center;
@@ -548,6 +772,21 @@
             color: white;
         }
 
+        .control-btn.streaming-btn {
+            color: #ffa502;
+            border-color: rgba(255, 165, 2, 0.3);
+        }
+
+        .control-btn.streaming-btn:hover {
+            background: #ffa502;
+            color: white;
+        }
+
+        .control-btn.streaming-btn.active {
+            background: #ffa502;
+            color: white;
+        }
+
         .error-message {
             background: #ff4757;
             color: white;
@@ -587,6 +826,27 @@
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes stepAppear {
+            from { 
+                opacity: 0.3; 
+                transform: translateX(-10px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateX(0); 
+            }
         }
 
         /* Mobile optimizations */
@@ -632,6 +892,45 @@
             .message-content h4 { font-size: 1em; }
             .message-content h5 { font-size: 0.95em; }
             .message-content h6 { font-size: 0.9em; }
+
+            .reasoning-toggle {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+            
+            .reasoning-summary {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            
+            .reasoning-stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .step-icon {
+                width: 20px;
+                height: 20px;
+                font-size: 10px;
+            }
+            
+            .reasoning-step {
+                padding: 10px 12px;
+                gap: 8px;
+            }
+            
+            .step-title {
+                font-size: 12px;
+            }
+            
+            .step-description {
+                font-size: 11px;
+            }
+            
+            .reasoning-steps {
+                max-height: 300px;
+            }
 
             .chat-input {
                 padding: 6px 8px;
@@ -744,6 +1043,9 @@
                 <button class="control-btn clear-btn" onclick="clearConversation()">
                     <i class="fas fa-trash"></i> Clear
                 </button>
+                <button class="control-btn streaming-btn" id="streamingToggle" onclick="toggleStreaming()">
+                    <i class="fas fa-bolt"></i> <span id="streamingText">Enable Streaming</span>
+                </button>
                 <button class="control-btn" onclick="showSystemStatus()">
                     <i class="fas fa-info-circle"></i> Status
                 </button>
@@ -752,9 +1054,11 @@
     </div>
 
     <script>
-        class ResearchChatApp {
+        class EnhancedResearchChatApp {
             constructor() {
                 this.isProcessing = false;
+                this.streamingEnabled = true; // Default to streaming enabled
+                this.currentEventSource = null;
                 
                 // Generate unique session ID with timestamp
                 this.sessionId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -765,6 +1069,8 @@
                 this.errorMessage = document.getElementById('errorMessage');
                 this.processingMessage = document.getElementById('processingMessage');
                 this.typingIndicator = document.getElementById('typingIndicator');
+                this.streamingToggle = document.getElementById('streamingToggle');
+                this.streamingText = document.getElementById('streamingText');
                 
                 // Configure marked for better rendering
                 this.configureMarkdown();
@@ -772,8 +1078,20 @@
                 this.initializeEventListeners();
                 this.setRandomWelcomeMessage();
                 this.checkSystemStatus();
+                this.updateStreamingUI();
                 
                 console.log('🆔 Local session:', this.sessionId);
+                console.log('🔄 Streaming enabled:', this.streamingEnabled);
+            }
+            
+            updateStreamingUI() {
+                if (this.streamingEnabled) {
+                    this.streamingToggle.classList.add('active');
+                    this.streamingText.textContent = 'Streaming ON';
+                } else {
+                    this.streamingToggle.classList.remove('active');
+                    this.streamingText.textContent = 'Streaming OFF';
+                }
             }
             
             setRandomWelcomeMessage() {
@@ -796,6 +1114,7 @@
                     <p><strong>Try asking:</strong></p>
                     <p>• ${selectedExamples[0]}</p>
                     <p>• ${selectedExamples[1]}</p>
+                    <p><small>💡 <strong>Streaming mode enabled</strong> - You'll see my reasoning process in real-time!</small></p>
                 `;
                 
                 document.getElementById('welcomeMessage').innerHTML = welcomeContent;
@@ -838,7 +1157,7 @@
                     
                     if (status.system_ready) {
                         statusDot.className = 'status-dot online';
-                        statusText.textContent = 'Online';
+                        statusText.textContent = status.streaming_enabled ? 'Streaming Ready' : 'Online';
                     } else {
                         statusDot.className = 'status-dot';
                         statusText.textContent = 'System Issues';
@@ -861,12 +1180,204 @@
                 this.updateSendButton(false);
                 this.hideError();
                 
-                await this.sendAsyncMessage(message);
+                if (this.streamingEnabled) {
+                    await this.sendStreamingMessage(message);
+                } else {
+                    await this.sendAsyncMessage(message);
+                }
                 
                 this.isProcessing = false;
                 this.updateSendButton(true);
             }
             
+            // NEW: Streaming message handler with EventSource
+            async sendStreamingMessage(message) {
+                this.showProcessing('🔄 Starting streaming research...');
+                this.updateStatusDot('streaming');
+                
+                let currentMessageDiv = null;
+                let reasoningContainer = null;
+                let reasoningToggle = null;
+                let reasoningSteps = [];
+                let stepCounter = 0;
+                
+                try {
+                    // Encode parameters for GET request (EventSource compatibility)
+                    const params = {
+                        message: message,
+                        session_id: this.sessionId
+                    };
+                    const encodedParams = btoa(JSON.stringify(params));
+                    
+                    // Create EventSource connection
+                    this.currentEventSource = new EventSource(`/chat/stream/${encodedParams}`);
+                    
+                    this.currentEventSource.onopen = () => {
+                        console.log('🔄 Streaming connection opened');
+                        this.showProcessing('🧠 AI is thinking...');
+                    };
+                    
+                    this.currentEventSource.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            console.log('📨 Stream event:', data.event, data.data);
+                            
+                            switch (data.event) {
+                                case 'start':
+                                    this.showProcessing('🚀 Research session started...');
+                                    break;
+                                    
+                                case 'processing_start':
+                                    this.showProcessing('🔍 Processing your query...');
+                                    break;
+                                    
+                                case 'reasoning_step':
+                                    stepCounter++;
+                                    reasoningSteps.push(data.data.step);
+                                    
+                                    // Create message div if not exists
+                                    if (!currentMessageDiv) {
+                                        currentMessageDiv = this.addMessage('assistant', '', {
+                                            streaming: true,
+                                            reasoning_data: { steps: [], summary: {} }
+                                        });
+                                        const elements = this.createReasoningComponents(currentMessageDiv);
+                                        reasoningContainer = elements.container;
+                                        reasoningToggle = elements.toggle;
+                                    }
+                                    
+                                    // Update processing message
+                                    this.showProcessing(`🧠 Step ${stepCounter}: ${data.data.step.title}...`);
+                                    
+                                    // Add reasoning step to UI
+                                    this.addReasoningStepToUI(reasoningContainer, data.data.step, true);
+                                    
+                                    // Update toggle if visible
+                                    if (reasoningToggle && reasoningContainer.classList.contains('visible')) {
+                                        this.updateReasoningHeader(reasoningContainer, reasoningSteps);
+                                    }
+                                    break;
+                                    
+                                case 'reasoning_summary':
+                                    if (reasoningToggle && reasoningContainer) {
+                                        this.updateReasoningHeader(reasoningContainer, reasoningSteps, data.data.summary);
+                                    }
+                                    break;
+                                    
+                                case 'response_chunk':
+                                    if (data.data.content && currentMessageDiv) {
+                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
+                                        const reasoningDiv = contentDiv.querySelector('.reasoning-components');
+                                        
+                                        // Update main response content
+                                        const textContent = this.formatMessage(data.data.content);
+                                        if (reasoningDiv) {
+                                            contentDiv.innerHTML = textContent;
+                                            contentDiv.appendChild(reasoningDiv);
+                                        } else {
+                                            contentDiv.innerHTML = textContent;
+                                        }
+                                        
+                                        this.scrollToBottom();
+                                    }
+                                    break;
+                                    
+                                case 'response_complete':
+                                case 'complete':
+                                    this.hideProcessing();
+                                    this.updateStatusDot('online');
+                                    
+                                    if (data.data.response && currentMessageDiv) {
+                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
+                                        const reasoningDiv = contentDiv.querySelector('.reasoning-components');
+                                        
+                                        // Final response update
+                                        const textContent = this.formatMessage(data.data.response);
+                                        if (reasoningDiv) {
+                                            contentDiv.innerHTML = textContent;
+                                            contentDiv.appendChild(reasoningDiv);
+                                        } else {
+                                            contentDiv.innerHTML = textContent;
+                                        }
+                                        
+                                        // Mark streaming as complete
+                                        if (reasoningToggle) {
+                                            reasoningToggle.classList.remove('streaming');
+                                            const icon = reasoningToggle.querySelector('.toggle-icon');
+                                            icon.textContent = '🧠';
+                                        }
+                                        
+                                        // Remove streaming class from steps
+                                        const streamingSteps = reasoningContainer?.querySelectorAll('.reasoning-step.streaming');
+                                        streamingSteps?.forEach(step => step.classList.remove('streaming'));
+                                    }
+                                    
+                                    // Close connection
+                                    if (this.currentEventSource) {
+                                        this.currentEventSource.close();
+                                        this.currentEventSource = null;
+                                    }
+                                    
+                                    console.log('✅ Streaming response completed');
+                                    break;
+                                    
+                                case 'error':
+                                    this.hideProcessing();
+                                    this.updateStatusDot('online');
+                                    this.showError(data.data.error);
+                                    
+                                    if (!currentMessageDiv) {
+                                        this.addMessage('assistant', 'Sorry, something went wrong while processing your request.');
+                                    }
+                                    
+                                    if (this.currentEventSource) {
+                                        this.currentEventSource.close();
+                                        this.currentEventSource = null;
+                                    }
+                                    break;
+                                    
+                                case 'stream_complete':
+                                    // Stream finished successfully
+                                    if (this.currentEventSource) {
+                                        this.currentEventSource.close();
+                                        this.currentEventSource = null;
+                                    }
+                                    break;
+                            }
+                        } catch (parseError) {
+                            console.error('Failed to parse stream event:', parseError);
+                        }
+                    };
+                    
+                    this.currentEventSource.onerror = (error) => {
+                        console.error('EventSource error:', error);
+                        this.hideProcessing();
+                        this.updateStatusDot('online');
+                        this.showError('Streaming connection lost. Falling back to regular mode...');
+                        
+                        // Fallback to regular request
+                        setTimeout(() => {
+                            this.sendAsyncMessage(message);
+                        }, 1000);
+                        
+                        if (this.currentEventSource) {
+                            this.currentEventSource.close();
+                            this.currentEventSource = null;
+                        }
+                    };
+                    
+                } catch (error) {
+                    console.error('Streaming setup failed:', error);
+                    this.hideProcessing();
+                    this.updateStatusDot('online');
+                    this.showError('Streaming failed. Using regular mode...');
+                    
+                    // Fallback to regular request
+                    await this.sendAsyncMessage(message);
+                }
+            }
+            
+            // FALLBACK: Regular async message handler (unchanged)
             async sendAsyncMessage(message) {
                 this.showProcessing('🔍 Processing your query...');
 
@@ -886,12 +1397,17 @@
                     }
 
                     const data = await response.json();
-
                     this.hideProcessing();
 
                     if (data.success && data.response_content && data.response_content.trim()) {
-                        this.addMessage('assistant', data.response_content);
-                        console.log('✅ Async response received, execution time:', data.execution_time);
+                        // Add message with reasoning if available
+                        this.addMessage('assistant', data.response_content, {
+                            reasoning_data: data.reasoning_data,
+                            execution_time: data.execution_time
+                        });
+                        
+                        console.log('✅ Regular response received, execution time:', data.execution_time);
+                        console.log('🧠 Reasoning data available:', !!data.reasoning_data);
                     } else {
                         this.addMessage('assistant', data.error || 'No response generated. Please try again.');
                         this.showError(data.error || 'Unknown error occurred');
@@ -899,7 +1415,7 @@
 
                 } catch (error) {
                     this.hideProcessing();
-                    console.error('Async request failed:', error);
+                    console.error('Request failed:', error);
                     this.showError('Error: ' + error.message);
                     this.addMessage('assistant', 'Something went wrong while processing your request. Please try again.');
                 }
@@ -923,12 +1439,238 @@
                     contentDiv.innerHTML = this.formatMessage(content);
                 }
                 
-                messageDiv.appendChild(contentDiv);
+                // Add reasoning components if available
+                if (metadata && (metadata.reasoning_data || metadata.streaming)) {
+                    const reasoningComponents = this.createReasoningComponents(messageDiv, metadata);
+                    contentDiv.appendChild(reasoningComponents.wrapper);
+                }
                 
+                messageDiv.appendChild(contentDiv);
                 this.chatMessages.insertBefore(messageDiv, this.typingIndicator);
                 this.scrollToBottom();
                 
                 return messageDiv;
+            }
+            
+            createReasoningComponents(messageDiv, metadata = {}) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'reasoning-components';
+                
+                // Create toggle button
+                const toggleButton = document.createElement('button');
+                toggleButton.className = 'reasoning-toggle';
+                
+                if (metadata.streaming) {
+                    toggleButton.classList.add('streaming');
+                    toggleButton.innerHTML = `
+                        <span class="toggle-icon">🔄</span>
+                        <span class="toggle-text">AI Reasoning (live)</span>
+                        <span class="toggle-arrow">▼</span>
+                    `;
+                } else {
+                    toggleButton.innerHTML = `
+                        <span class="toggle-icon">🧠</span>
+                        <span class="toggle-text">Show AI Reasoning</span>
+                        <span class="toggle-arrow">▼</span>
+                    `;
+                }
+                
+                // Create reasoning container
+                const container = document.createElement('div');
+                container.className = 'reasoning-container';
+                
+                // Add header
+                const header = document.createElement('div');
+                header.className = 'reasoning-header';
+                header.innerHTML = `
+                    <div class="reasoning-summary">
+                        <div class="summary-text">Processing your query...</div>
+                        <div class="reasoning-stats">
+                            <span class="stat-item">
+                                <span>⏱️</span>
+                                <span class="duration">--</span>
+                            </span>
+                            <span class="stat-item">
+                                <span>📊</span>
+                                <span class="step-count">-- steps</span>
+                            </span>
+                            <span class="stat-item">
+                                <span>🔧</span>
+                                <span class="tool-count">-- tools</span>
+                            </span>
+                        </div>
+                    </div>
+                `;
+                
+                // Add steps container
+                const stepsContainer = document.createElement('div');
+                stepsContainer.className = 'reasoning-steps';
+                
+                // Add footer
+                const footer = document.createElement('div');
+                footer.className = 'reasoning-footer';
+                footer.innerHTML = `
+                    <button class="details-toggle" onclick="window.chatApp.toggleStepDetails(this)">
+                        <span>Show Details</span>
+                    </button>
+                    <div>
+                        <button class="feedback-btn" onclick="window.chatApp.sendReasoningFeedback('helpful')">
+                            👍 Helpful
+                        </button>
+                        <button class="feedback-btn" onclick="window.chatApp.sendReasoningFeedback('confusing')">
+                            🤔 Confusing
+                        </button>
+                    </div>
+                `;
+                
+                container.appendChild(header);
+                container.appendChild(stepsContainer);
+                container.appendChild(footer);
+                
+                // Add click handler for toggle
+                toggleButton.addEventListener('click', () => {
+                    const isVisible = container.classList.contains('visible');
+                    const toggleText = toggleButton.querySelector('.toggle-text');
+                    const arrow = toggleButton.querySelector('.toggle-arrow');
+                    
+                    if (isVisible) {
+                        container.classList.remove('visible');
+                        toggleButton.classList.remove('active');
+                        toggleText.textContent = toggleButton.classList.contains('streaming') ? 'AI Reasoning (live)' : 'Show AI Reasoning';
+                    } else {
+                        container.classList.add('visible');
+                        toggleButton.classList.add('active');
+                        toggleText.textContent = toggleButton.classList.contains('streaming') ? 'Hide AI Reasoning (live)' : 'Hide AI Reasoning';
+                    }
+                });
+                
+                // Populate existing reasoning data if available
+                if (metadata.reasoning_data && metadata.reasoning_data.steps) {
+                    this.populateReasoningSteps(container, metadata.reasoning_data);
+                }
+                
+                wrapper.appendChild(toggleButton);
+                wrapper.appendChild(container);
+                
+                return { wrapper, container, toggle: toggleButton };
+            }
+            
+            addReasoningStepToUI(container, step, isStreaming = false) {
+                const stepsContainer = container.querySelector('.reasoning-steps');
+                
+                const stepDiv = document.createElement('div');
+                stepDiv.className = `reasoning-step ${isStreaming ? 'streaming' : ''}`;
+                
+                const iconColor = step.color || '#666666';
+                
+                stepDiv.innerHTML = `
+                    <div class="step-icon" style="background-color: ${iconColor}">
+                        ${step.icon || '📝'}
+                    </div>
+                    <div class="step-content">
+                        <div class="step-title">${step.title}</div>
+                        <div class="step-description">${step.description}</div>
+                        <div class="step-meta">
+                            ${step.timestamp ? `<span>⏱️ ${step.timestamp}</span>` : ''}
+                            ${step.tool_name ? `<span>🔧 ${step.tool_name}</span>` : ''}
+                        </div>
+                        ${step.details ? `
+                            <div class="step-details">
+                                <strong>Technical Details:</strong><br>
+                                ${step.details}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                stepsContainer.appendChild(stepDiv);
+                this.scrollToBottom();
+            }
+            
+            updateReasoningHeader(container, steps, summary = null) {
+                const header = container.querySelector('.reasoning-header');
+                const summaryText = header.querySelector('.summary-text');
+                const stepCount = header.querySelector('.step-count');
+                const toolCount = header.querySelector('.tool-count');
+                
+                if (summary && summary.description) {
+                    summaryText.textContent = summary.description;
+                } else {
+                    summaryText.textContent = `Processing ${steps.length} reasoning steps...`;
+                }
+                
+                stepCount.textContent = `${steps.length} steps`;
+                
+                const uniqueTools = [...new Set(steps.map(s => s.tool_name).filter(Boolean))];
+                toolCount.textContent = `${uniqueTools.length} tools`;
+            }
+            
+            populateReasoningSteps(container, reasoningData) {
+                if (!reasoningData || !reasoningData.steps) return;
+                
+                const stepsContainer = container.querySelector('.reasoning-steps');
+                stepsContainer.innerHTML = '';
+                
+                reasoningData.steps.forEach(step => {
+                    this.addReasoningStepToUI(container, step, false);
+                });
+                
+                // Update header
+                this.updateReasoningHeader(container, reasoningData.steps, reasoningData.summary);
+            }
+            
+            toggleStepDetails(button) {
+                const container = button.closest('.reasoning-container');
+                const details = container.querySelectorAll('.step-details');
+                const isVisible = container.querySelector('.step-details.visible');
+                
+                details.forEach(detail => {
+                    if (isVisible) {
+                        detail.classList.remove('visible');
+                    } else {
+                        detail.classList.add('visible');
+                    }
+                });
+                
+                button.textContent = isVisible ? 'Show Details' : 'Hide Details';
+            }
+            
+            sendReasoningFeedback(type) {
+                console.log('Reasoning feedback:', type);
+                // Could send to backend for analytics
+                
+                // Show quick confirmation
+                const buttons = document.querySelectorAll('.feedback-btn');
+                buttons.forEach(btn => {
+                    if (btn.textContent.includes(type === 'helpful' ? '👍' : '🤔')) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '✓ Thanks!';
+                        btn.disabled = true;
+                        
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.disabled = false;
+                        }, 2000);
+                    }
+                });
+            }
+            
+            updateStatusDot(status) {
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                
+                statusDot.className = `status-dot ${status}`;
+                
+                switch (status) {
+                    case 'streaming':
+                        statusText.textContent = 'Streaming...';
+                        break;
+                    case 'online':
+                        statusText.textContent = this.streamingEnabled ? 'Streaming Ready' : 'Online';
+                        break;
+                    default:
+                        statusText.textContent = 'System Issues';
+                }
             }
             
             formatMessage(content) {
@@ -994,6 +1736,18 @@
             }
         }
         
+        // Global functions
+        function toggleStreaming() {
+            const app = window.chatApp;
+            app.streamingEnabled = !app.streamingEnabled;
+            app.updateStreamingUI();
+            
+            console.log('🔄 Streaming toggled:', app.streamingEnabled);
+            
+            // Update status
+            app.checkSystemStatus();
+        }
+        
         async function clearConversation() {
             if (!confirm('Are you sure you want to clear this conversation?')) {
                 return;
@@ -1001,6 +1755,12 @@
             
             try {
                 const app = window.chatApp;
+                
+                // Close any active streaming connection
+                if (app.currentEventSource) {
+                    app.currentEventSource.close();
+                    app.currentEventSource = null;
+                }
                 
                 // Call the backend clear-memory endpoint
                 const response = await fetch('/chat/clear-memory', {
@@ -1038,20 +1798,31 @@
                 const response = await fetch('/status');
                 const status = await response.json();
                 
+                const streamingStatus = status.streaming_enabled ? '✅ Enabled' : '❌ Disabled';
+                
                 alert(`System Status:
 • Elasticsearch: ${status.elasticsearch_connected ? '✅ Connected' : '❌ Disconnected'}
 • System Ready: ${status.system_ready ? '✅ Yes' : '❌ No'}
+• Streaming: ${streamingStatus}
 • Memory Sessions: ${status.memory_sessions || 0}
 • Queries Total: ${status.query_stats.total || 0}
 • Success: ${status.query_stats.success || 0}
+• Streaming: ${status.query_stats.streaming || 0}
 • Failed: ${status.query_stats.failed || 0}`);
             } catch (error) {
                 alert('Failed to fetch system status');
             }
         }
         
-        // Initialize the app
-        window.chatApp = new ResearchChatApp();
+        // Initialize the enhanced app
+        window.chatApp = new EnhancedResearchChatApp();
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (window.chatApp && window.chatApp.currentEventSource) {
+                window.chatApp.currentEventSource.close();
+            }
+        });
     </script>
 </body>
 </html>

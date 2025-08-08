@@ -1,25 +1,25 @@
 """
-Async Flask Application - Modern async/await pattern
-Removes: Complex threading, event loop management, double timeouts
-Adds: Direct async execution, cleaner error handling, better performance
+Enhanced Async Flask Application with Streaming Support
+Adds Server-Sent Events for real-time reasoning display
 """
 
 import os
 import asyncio
-from quart import Quart, request, jsonify
+import json
+from quart import Quart, request, jsonify, Response
 from quart_cors import cors
 
 from research_agent.core.agent_manager import AgentManager
 
 
 def create_app():
-    """Create and configure async Flask app using Quart."""
+    """Create and configure async Flask app using Quart with streaming support."""
     app = Quart(__name__)
     
-    # Enable CORS
-    app = cors(app)
+    # Enable CORS with streaming support
+    app = cors(app, allow_origin="*", allow_headers=["Content-Type"], allow_methods=["GET", "POST"])
     
-    # Initialize the agent manager
+    # Initialize the enhanced agent manager
     agent_manager = AgentManager()
     
     @app.route('/')
@@ -49,9 +49,10 @@ def create_app():
         else:
             return jsonify(health_info), 503
 
+    # BACKWARD COMPATIBLE: Original chat endpoint
     @app.route('/chat/respond', methods=['POST'])
     async def chat_respond():
-        """Handle chat requests - now fully async."""
+        """Handle chat requests - backward compatible with reasoning data."""
         try:
             data = await request.get_json()
             
@@ -70,13 +71,14 @@ def create_app():
                     "error": "Empty message"
                 }), 400
 
-            # Direct async processing - properly calling the async method!
+            # Use enhanced processing with reasoning data
             result = await agent_manager.process_query_async(query, session_id)
             
             if result['success']:
                 return jsonify({
                     "success": True,
                     "response_content": result['response'],
+                    "reasoning_data": result.get('reasoning_data'),  # NEW: Include reasoning
                     "session_id": result['session_id'],
                     "execution_time": result.get('execution_time', 0),
                     "response_type": result.get('response_type', 'research')
@@ -93,6 +95,119 @@ def create_app():
                 "success": False, 
                 "error": f"Server error: {str(e)}"
             }), 500
+
+    # NEW: Streaming endpoint with Server-Sent Events
+    @app.route('/chat/respond-stream', methods=['POST'])
+    async def chat_respond_stream():
+        """Handle streaming chat requests with real-time reasoning."""
+        try:
+            data = await request.get_json()
+            
+            if not data or 'message' not in data:
+                return jsonify({
+                    "success": False, 
+                    "error": "Missing 'message' field"
+                }), 400
+
+            query = data['message'].strip()
+            session_id = data.get('session_id')
+            
+            if not query:
+                return jsonify({
+                    "success": False, 
+                    "error": "Empty message"
+                }), 400
+
+            # Stream events generator
+            async def generate_events():
+                try:
+                    async for event in agent_manager.stream_query_with_reasoning(query, session_id):
+                        # Format as Server-Sent Event
+                        event_json = json.dumps(event, default=str)
+                        yield f"data: {event_json}\n\n"
+                    
+                    # Send final completion marker
+                    yield f"data: {json.dumps({'event': 'stream_complete', 'data': {}})}\n\n"
+                    
+                except Exception as e:
+                    # Send error event
+                    error_event = {
+                        "event": "error",
+                        "data": {"error": f"Streaming error: {str(e)}"}
+                    }
+                    yield f"data: {json.dumps(error_event)}\n\n"
+
+            # Return SSE response
+            return Response(
+                generate_events(), 
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Cache-Control'
+                }
+            )
+                
+        except Exception as e:
+            return jsonify({
+                "success": False, 
+                "error": f"Server error: {str(e)}"
+            }), 500
+
+    # ALTERNATIVE: GET-based streaming endpoint (for EventSource compatibility)
+    @app.route('/chat/stream/<path:encoded_params>')
+    async def chat_stream_get(encoded_params):
+        """GET-based streaming endpoint for EventSource compatibility."""
+        try:
+            import urllib.parse
+            import base64
+            
+            # Decode parameters
+            decoded = base64.b64decode(encoded_params).decode('utf-8')
+            params = json.loads(decoded)
+            
+            query = params.get('message', '').strip()
+            session_id = params.get('session_id')
+            
+            if not query:
+                return "data: " + json.dumps({
+                    "event": "error", 
+                    "data": {"error": "Empty message"}
+                }) + "\n\n", 400
+
+            # Stream events generator
+            async def generate_events():
+                try:
+                    async for event in agent_manager.stream_query_with_reasoning(query, session_id):
+                        event_json = json.dumps(event, default=str)
+                        yield f"data: {event_json}\n\n"
+                    
+                    yield f"data: {json.dumps({'event': 'stream_complete', 'data': {}})}\n\n"
+                    
+                except Exception as e:
+                    error_event = {
+                        "event": "error",
+                        "data": {"error": f"Streaming error: {str(e)}"}
+                    }
+                    yield f"data: {json.dumps(error_event)}\n\n"
+
+            return Response(
+                generate_events(), 
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Cache-Control'
+                }
+            )
+                
+        except Exception as e:
+            return "data: " + json.dumps({
+                "event": "error", 
+                "data": {"error": f"Server error: {str(e)}"}
+            }) + "\n\n", 500
 
     @app.route('/chat/clear-memory', methods=['POST'])
     async def clear_memory():
@@ -186,8 +301,9 @@ if __name__ == '__main__':
         port = int(os.getenv('FLASK_PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
         
-        print("Research Agent Server starting (Async)...")
+        print("Research Agent Server starting (Async + Streaming)...")
         print(f"URL: http://{host}:{port}")
+        print("🔄 Streaming enabled at /chat/respond-stream")
         
         # Use Quart's async run method
         app.run(host=host, port=port, debug=debug, use_reloader=False)
